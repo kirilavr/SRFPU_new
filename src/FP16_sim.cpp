@@ -273,10 +273,7 @@ void unit_tests(void)
 */
 
 
-int main()
-{
-    unit_tests();
-}
+
 
 
 

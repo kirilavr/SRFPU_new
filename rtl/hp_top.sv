@@ -31,9 +31,37 @@ module hp_top
     input logic ops_ready,
 
     output logic[15:0] res_out,
-    output logic zero, inf, subN, Norm, QNan, SNan
+    output logic zero, inf, subN, Norm, QNan, SNan,
+
+
+    /* testing outputs */
+    output logic[7:0] flags_a,
+    output logic[7:0] flags_b
+
 
 );
+
+    /* testing outputs */
+    assign flags_a[7] = 0;
+    assign flags_a[6] = 0;
+
+    assign flags_a[5] = a_zero;
+    assign flags_a[4] = a_inf;
+    assign flags_a[3] = a_subN;
+    assign flags_a[2] = a_Norm;
+    assign flags_a[1] = a_QNan;
+    assign flags_a[0] = a_SNan;
+
+    assign flags_b[7] = 0;
+    assign flags_b[6] = 0;
+
+    assign flags_b[5] = b_zero;
+    assign flags_b[4] = b_inf;
+    assign flags_b[3] = b_subN;
+    assign flags_b[2] = b_Norm;
+    assign flags_b[1] = b_QNan;
+    assign flags_b[0] = b_SNan;
+
 
     /* operation parameters */
     parameter ADD_RN = 3'b000;
@@ -46,12 +74,12 @@ module hp_top
     parameter DIV_SR = 3'b111;
 
     /* defining output wires from "class" module */
-    wire a_zero;
-    wire a_inf;
-    wire a_subN; 
-    wire a_Norm;
-    wire a_QNan;
-    wire a_SNan;
+    logic a_zero;
+    logic a_inf;
+    logic a_subN; 
+    logic a_Norm;
+    logic a_QNan;
+    logic a_SNan;
 
     wire b_zero;
     wire b_inf;

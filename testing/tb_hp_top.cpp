@@ -43,6 +43,7 @@ test_case get_test_case(bool soak)
         if(l == 10)
         {
             k++;
+            l = k;
         }
         else
         {
@@ -54,11 +55,13 @@ test_case get_test_case(bool soak)
 }
 
 
-//vluint64_t sim_time = 0;
+vluint64_t sim_time = 0;
 
 
-/*
+
 int main(int argc, char** argv, char** env) {
+
+    /* dut model object */
     Vhp_top *dut = new Vhp_top;
 
     Verilated::traceEverOn(true);
@@ -68,12 +71,16 @@ int main(int argc, char** argv, char** env) {
     m_trace->open("waveform.vcd");
     uint8_t test_idx = 0;
 
+    /* opening file to write test results */
+    std::ofstream res_file_top("res_file_top.txt", std::ios::app);
+    std::ofstream res_file_class("res_file_class.txt", std::ios::app);
+
     //unit test loop
     while (sim_time < MAX_SIM_TIME) {
 
 
         test_case Case = get_test_case(0);
-        vluint16_t op1 = Case.op2;
+        vluint16_t op1 = Case.op1;
         vluint16_t op2 = Case.op2;
 
         dut->src_a = op1;
@@ -82,10 +89,19 @@ int main(int argc, char** argv, char** env) {
         dut->eval();
 
         vluint16_t result = dut->res_out;
-        std::cout<<std::bitset<16>(result);
+
+        vluint8_t flags_a = dut->flags_a;
+        vluint8_t flags_b = dut->flags_b;
+
+        res_file_top<<"test case: "<<sim_time<<" Input 1: "<<std::bitset<16>(op1)<<" Input 2: "<<std::bitset<16>(op2)<<" result: "<<std::bitset<16>(result)<<"\n";
+        res_file_class<<"test_case: "<<sim_time<<" flags a: "<<std::bitset<8>(flags_a)<<" flags b: "<<std::bitset<8>(flags_b)<<std::endl;
+
 
         sim_time++;
     }
+
+    res_file_top.close();
+    res_file_class.close();
 
     m_trace->close();
     delete dut;
@@ -93,10 +109,4 @@ int main(int argc, char** argv, char** env) {
 
 }
 
-*/
 
-int main()
-{
-    test_case Case = get_test_case(0);
-    std::cout<<Case.op1<<" "<<Case.op2;
-}

@@ -1,0 +1,28 @@
+#!/bin/bash
+
+MAKEFILE_PATH="./obj_dir/Vhp_top.mk"
+
+FP16_USER_CLASS="    FP16_sim"
+FP16_DIR="    ./src"
+COMPILE="FP16_sim.o: ./src/FP16_sim.cpp
+	\$(OBJCACHE) \$(CXX) \$(CXXFLAGS) \$(CPPFLAGS) \$(OPT_FAST) -c -o \$@ $<"
+
+
+add_to_section(){
+    local section=$1
+    local line=$2
+    local file=$3
+
+    awk -v line="$line" -v sec="$section" 'BEGIN {p = 0}
+    p==0 && $0 ~ sec {print;p=1;next} 
+    p==1 && /^$/ {print line; p=2}
+    {print}' "$file" > temp && mv temp "$file"
+
+}
+
+
+add_to_section "VM_USER_CLASSES" "$FP16_USER_CLASS" "$MAKEFILE_PATH"
+add_to_section "VM_USER_DIR" "$FP16_DIR" "$MAKEFILE_PATH"
+add_to_section "VPATH" "$COMPILE" "$MAKEFILE_PATH"
+
+

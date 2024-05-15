@@ -4,9 +4,10 @@
 #include "../src/FP16_sim.hpp"
 #include <stdlib.h>
 #include <iostream>
-//#include <verilated.h>
-//#include <verilated_vcd_c.h>
-//#include "../obj_dir/Vhp_top.h"
+#include <verilated.h>
+#include <verilated_vcd_c.h>
+#include "../obj_dir/Vhp_top.h"
+#include <fstream>
 
 
 /* test specification:
