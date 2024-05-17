@@ -23,6 +23,7 @@ waveform.vcd:obj_dir/V$(MODULE)
 
 .stamp.verilate: ./rtl/$(MODULE).sv ./testing/tb_$(MODULE).cpp
 	verilator  --trace -cc ./rtl/$(MODULE).sv --exe ./testing/tb_$(MODULE).cpp
+	./add_helpers.bs
 	touch .stamp.verilate
 
 .PHONY:lint
@@ -34,3 +35,7 @@ clean:
 	rm -rf .stamp.*;
 	rm -rf ./obj_dir
 	rm -rf waveform.vcd
+	rm -rf res_file_top.txt
+	rm -rf res_file_class.txt
+	rm -rf res_file_mult.txt
+	rm -rf res_file_clz.txt
