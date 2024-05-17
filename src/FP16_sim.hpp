@@ -43,7 +43,7 @@ typedef struct FP16
 
     private:
 
-    uint8_t clz(uint16_t);
+    static uint8_t clz(uint16_t);
 
     void set_zero(bool negative);
 
