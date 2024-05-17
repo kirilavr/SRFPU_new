@@ -8,6 +8,8 @@
 #include <verilated_vcd_c.h>
 #include "../obj_dir/Vhp_top.h"
 #include <fstream>
+#include <random>
+#include <algorithm>
 
 
 /* test specification:
@@ -22,13 +24,16 @@
 /* Unit tests */
 typedef struct test_case
 {
-    uint16_t op1;
-    uint16_t op2;
+    FP16 op1;
+    FP16 op2;
 
-    uint16_t expected_res;
+    FP16 expected_res;
 }test_case;
 
 
 test_case get_test_case(bool soak);
+
+
+
 
 #endif 
