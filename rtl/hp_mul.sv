@@ -1,7 +1,7 @@
 `include "./rtl/clz"
 
 
-module hp_mul
+module hp_mul #(parameter num_round_bits)
 (
 
     input logic[15:0] a_src,
@@ -23,35 +23,52 @@ module hp_mul
     input logic b_SNan,
 
     output logic[15:0] result,
-    output logic[21:0] round_mant,
-    output logic zero, inf, subnormal, normal, QNan, SNan
+    output logic[9+num_round_bits:0] round_mant,
+    output logic zero, inf, subN, Norm, QNan, SNan,
+
+    /* Test outputs */
+    output logic[5:0] res_exp_t,
+    output logic[21:0] res_mant_t,
+    output logic[7:0] shift
 
 );
 
     logic signed [5:0]  a_exp, b_exp;
     logic        [10:0] a_mant, b_mant;
-    logic        [5:0]  res_exp;
+    logic signed [5:0]  res_exp;
     logic        [21:0] res_mant;
 
-    logic      [9:0]  clz_rin;
-    logic      [3:0]  clz_rout;
+    logic        [9 + num_round_bits:0]  clz_rin;
+    logic        [7:0]  clz_rout;
 
 
-    /*clz_rin is a register for the count leading zeros module which is combinatorial and is used to deal with subnormals.*/
-    clz      clz(clz_rin, clz_rout);
+
+
+    /*clz_rin is a register for the count leading zeros module which is combinatorial and is used to deal with subNs.*/
+    clz #(num_round_bits) clz(clz_rin, clz_rout);
 
     assign a_exp  = a_src[14:10] - 15;
     assign b_exp  = b_src[14:10] - 15;
 
+    /* output testing */
+    assign res_exp_t  = res_exp;
+    assign res_mant_t = res_mant;
+    assign shift = clz_rout;
+    
     always_comb 
     begin
 
         result = 0;
-        a_mant = 0;
-        b_mant = 0;
+
+        zero = 0;
+        inf  = 0;
+        subN = 0;
+        Norm = 0;
+        QNan = 0;
+        SNan = 0;
 
         
-        /* combinatorial evaluation of special results and normalisation */
+        /* combinatorial evaluation of special results and Normisation */
         if(a_SNan | b_SNan)
         begin
             SNan   = 1;
@@ -75,7 +92,7 @@ module hp_mul
             else
             begin
                 inf    = 1;
-                result = {a_src[15]^b_src[15], {15{1'b1}}};
+                result = {a_src[15]^b_src[15], {5{1'b1}}, {10{1'b0}}};
             end
 
         end
@@ -90,9 +107,9 @@ module hp_mul
         else if(a_subN)
         begin
             /* clz */
-            clz_rin =  a_src[9:0];
+            clz_rin =  {a_src[9:0], {num_round_bits{1'b0}}};
             a_mant  =  {1'b1, a_src[9:0] << (clz_rout + 1)};
-            a_exp   =  a_src[14:10] - {{2{1'b0}}, clz_rout} + 1 - 15;
+            a_exp   =  a_src[14:10] - clz_rout[5:0] - 15;
 
             b_exp   = b_src[14:10] - 15;
             b_mant  = {1'b1, b_src[9:0]};
@@ -101,9 +118,9 @@ module hp_mul
         else if(b_subN)
         begin
             /* clz */
-            clz_rin =  b_src[9:0];
+            clz_rin =  {b_src[9:0], {num_round_bits{1'b0}}};
             b_mant  =  {1'b1, b_src[9:0] << (clz_rout + 1)};
-            b_exp   =  b_src[14:10] - {{2{1'b0}}, clz_rout} + 1 - 15;
+            b_exp   =  b_src[14:10] - clz_rout[5:0] - 15;
 
             a_exp   = a_src[14:10] - 15;
             a_mant  = {1'b1, a_src[9:0]};
@@ -119,45 +136,49 @@ module hp_mul
             b_mant  = {1'b1, b_src[9:0]};
         end 
 
-        res_mant = a_mant * b_mant;
-        res_exp  = a_exp  + b_exp;
 
-
-        /* normalisation */
-        if(res_mant[21] == 1)
+        if((a_subN & b_Norm) | (a_Norm & b_subN) | (a_Norm & b_Norm))
         begin 
-            res_mant      = res_mant >> 1;
-            res_exp       = res_exp + 1;
-        end
 
-        if(res_exp < -24)
-        begin 
-            result = {a_src[15]^b_src[15], {5{1'b0}}, {10{1'b0}}};
-            zero   = 1;
-        end
-        else if(res_exp > 15)
-        begin
-            result = {a_src[15] ^ b_src[15], {5{1'b1}}, {10{1'b1}}};
-            inf    = 1;
-        end 
-        else if(res_exp < -14)
-        begin
-            round_mant = res_mant >> (-14 - res_exp);
-            result     = {a_src[15] ^ b_src[15], {5{1'b0}}, res_mant[20:11]};
-            subnormal  = 1;
-        end 
-        else
-        begin
-            result     = {a_src[15] ^ b_src[15], res_exp[4:0], res_mant[20:11]};
-            normal     = 1;
-            round_mant = res_mant;
-        end
+            res_mant = a_mant * b_mant;
+            res_exp  = a_exp  + b_exp;
 
+            /* Normisation */
+            if(res_mant[21])
+            begin 
+                res_mant = res_mant >> 1;
+                res_exp  = res_exp + 1;
+            end
+
+            if(res_exp < -24)
+            begin 
+                result = {a_src[15]^b_src[15], {5{1'b0}}, {10{1'b0}}};
+                zero   = 1;
+            end
+            else if(res_exp > 15)
+            begin
+                result = {a_src[15] ^ b_src[15], {5{1'b1}}, {10{1'b0}}};
+                inf    = 1;
+            end 
+            else if(res_exp < -14)
+            begin
+                res_mant   = res_mant >> (-14 - res_exp);
+                round_mant = res_mant[21:12-num_round_bits];
+                result     = {a_src[15] ^ b_src[15], {5{1'b0}}, res_mant[19:10]};
+                subN       = 1;
+            end 
+            else
+            begin
+                res_exp    = res_exp + 15;
+                result     = {a_src[15] ^ b_src[15], res_exp[4:0], res_mant[19:10]};
+                Norm       = 1;
+                round_mant = res_mant[19:10-num_round_bits];
+            end
+        end
     end
-
-
+    
+    
 
 endmodule;
-
 
 
