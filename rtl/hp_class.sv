@@ -1,7 +1,7 @@
-module hp_class
+module hp_class #(parameter num_bits, parameter exp_width, parameter mant_width)
 (
 
-    input logic[15:0] f,
+    input logic[num_bits-1:0] f,
 
     output logic zero,
     output logic inf,
@@ -16,12 +16,12 @@ module hp_class
     logic expZeroes;
     logic sigZeroes;
 
-    assign expOnes   = &f[14:10];
-    assign expZeroes = ~|f[14:10];
+    assign expOnes   = &f[num_bits-2:num_bits-exp_width-1];
+    assign expZeroes = ~|f[num_bits-2:num_bits-exp_width-1];
     assign sigZeroes = ~|f[9:0];
 
-    assign SNan      = expOnes   & ~f[9] & ~sigZeroes;
-    assign QNan      = expOnes   &  f[9];
+    assign SNan      = expOnes   & ~f[mant_width-1] & ~sigZeroes;
+    assign QNan      = expOnes   &  f[mant_width-1];
     assign inf       = expOnes   & sigZeroes;
     assign zero      = expZeroes & sigZeroes;
     assign subN      = expZeroes & ~sigZeroes;

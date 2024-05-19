@@ -23,33 +23,42 @@
  * inputs: 16 bit operands "a" and "b", 3 bit input to determine operation
  * outputs: 16 bit result of operation with flags
  */
-module hp_top #(parameter num_round_bits = 6)
+module hp_top #
+(
+    parameter num_round_bits = 6, 
+    parameter num_bits = 16,
+
+    parameter exp_width  = (num_bits == 16) ? 5  : 8,
+    parameter mant_width = (num_bits == 16) ? 10 : 23,
+
+    parameter debug_mode = 1
+)
 (   
     input logic clk,
     input logic reset,
 
-    input logic[15:0] src_a,
-    input logic[15:0] src_b,
+    input logic[num_bits-1:0] src_a,
+    input logic[num_bits-1:0] src_b,
 
     input logic[2:0] operation,
     input logic ops_ready,
 
-    output logic[15:0] res_out,
+    output logic[num_bits-1:0] res_out,
     output logic zero, inf, subN, Norm, QNan, SNan,
 
 
     /* testing outputs */
     output logic[7:0] flags_a,
     output logic[7:0] flags_b,
-    output logic[15:0] res_mult_t,
+    output logic[num_bits-1:0] res_mult_t,
     output logic[7:0] mult_flags_t,
     output logic[5:0] res_exp_t,
-    output logic[21:0] res_mant_t,
+    output logic[mant_width*2+1:0] res_mant_t,
     output logic[7:0] shift,
 
     input logic[9+num_round_bits:0] clz_test,
     output logic[7:0] clz_res,
-    output logic[num_round_bits-1:0] rand_out
+    output logic[num_round_bits-1:0] rand_out_t
 
 );
 
@@ -120,25 +129,31 @@ module hp_top #(parameter num_round_bits = 6)
     wire mul_res_QNan; 
     wire mul_res_SNan;
 
+    wire[num_round_bits-1:0] rand_out;
+
     /* variable output width from operational blocks: note that the maximum from MULDIV */
-    reg[9+num_round_bits:0] rounding_reg;
-    reg[9:0]  rounded_result;
-    reg[15:0] trunc_result;
+    reg[mant_width+num_round_bits-1:0] rounding_reg;
+    reg[mant_width-1:0]                rounded_result;
+    reg[num_bits-1:0]                  trunc_result;
 
 
     /* Classifying simultaneously, this could be a potential point of improvement */
-    hp_class classifier_1(src_a, a_zero, a_inf, a_subN, a_Norm, a_QNan, a_SNan);
-    hp_class classifier_2(src_b, b_zero, b_inf, b_subN, b_Norm, b_QNan, b_SNan);
+    hp_class #(num_bits, exp_width, mant_width) classifier_1(src_a, a_zero, a_inf, a_subN, a_Norm, a_QNan, a_SNan);
+    hp_class #(num_bits, exp_width, mant_width) classifier_2(src_b, b_zero, b_inf, b_subN, b_Norm, b_QNan, b_SNan);
 
-    hp_mul #(num_round_bits) multiplier(src_a, a_zero, a_inf, a_subN, a_Norm, a_QNan, a_SNan, 
+    hp_mul #(num_round_bits, num_bits, exp_width, mant_width) multiplier
+                     (src_a, a_zero, a_inf, a_subN, a_Norm, a_QNan, a_SNan, 
                       src_b, b_zero, b_inf, b_subN, b_Norm, b_QNan, b_SNan,
-                      trunc_result, rounding_reg, mul_res_zero, mul_res_inf, mul_res_subN, mul_res_Norm, mul_res_QNan, mul_res_SNan,
+                      trunc_result, rounding_reg, 
+                      mul_res_zero, mul_res_inf, mul_res_subN, mul_res_Norm, mul_res_QNan, mul_res_SNan,
                       /*testing outputs*/res_exp_t, res_mant_t, shift);
 
-    hp_round #(num_round_bits) rounding(operation[0], rounding_reg, rounded_result);
+    rng #(num_round_bits) rng(clk, reset, rand_out);
+    hp_round #(num_round_bits, num_bits, mant_width) rounding(operation[0], rounding_reg, rand_out, rounded_result);
 
     clz #(num_round_bits) clz_tester(clz_test, clz_res);
-    rng #(num_round_bits) rng_tester(clk, reset, rand_out);
+    rng #(num_round_bits) rng_tester(clk, reset, rand_out_t);
+    
     
 
     always_comb
