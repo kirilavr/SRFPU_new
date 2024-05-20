@@ -1,19 +1,23 @@
 #include "test_fw.hpp"
 
-#define MAX_SIM_TIME 55
+#define MAX_SIM_TIME 30000000
 #define NUM_ROUND_BITS 6
 
 vluint64_t sim_time = 0;
 
-#include "test_fw.hpp"
-
 test_case get_test_case(bool soak, bool reset)
 {
-    static uint16_t i = 0;
-    static uint16_t j = 0;
+    int seed = 12345;
+    static std::mt19937 rng(seed);
+    static std::uniform_int_distribution<std::mt19937::result_type> dist(1, 32);
+
+    static uint32_t i = 0;
+    static uint32_t j = 0;
 
     static uint8_t  k = 0;
     static uint8_t  l = 0;
+
+    uint8_t increment;
 
     if(reset)
     {
@@ -30,15 +34,32 @@ test_case get_test_case(bool soak, bool reset)
 
     if(soak)
     {
+        increment = dist(rng);
+
+        if(j+increment > 65536)
+            if(i+increment > 65536)
+            {
+                FP16 op1 = FP16(0xFFFF);
+                FP16 op2 = FP16(0xFFFF);
+                FP16 expected_result = op1*op2;
+
+                test_case Case = {op1, op2, expected_result};
+                return Case;
+            }
+            else
+            {
+                i += increment;
+                j = i;
+            }
+
         FP16 op1 = FP16(i);
         FP16 op2 = FP16(j);
 
         FP16 expected_result = op1*op2;
 
-        test_case Case = {i, j, expected_result.val};
+        test_case Case = {op1, op2, expected_result};
 
-        i++;
-        j++;
+        j+= increment;
         
         return(Case);
     }
@@ -55,7 +76,7 @@ test_case get_test_case(bool soak, bool reset)
 
         FP16 expected_result = op1*op2;
 
-        test_case Case = {op1.val, op2.val, expected_result.val};
+        test_case Case = {op1, op2, expected_result};
 
         if(l == 9)
         {
@@ -72,14 +93,12 @@ test_case get_test_case(bool soak, bool reset)
 }
 
 
-template<typename T>
-uint8_t get_expected_shift(T test_val)
+uint8_t get_expected_shift(uint64_t test_val)
 {
-    uint8_t size = sizeof(T);
-    T top_bit = 1<<(size-1);
+    uint64_t top_bit = 1<<(9+NUM_ROUND_BITS);
     uint8_t shift = 0;
     
-    for(;((test_val<<shift) & top_bit) != top_bit; shift++){};
+    for(;((test_val<<shift) & top_bit) != top_bit; shift++){if(shift > 10+NUM_ROUND_BITS){break;}};
 
     return shift;
 }
@@ -118,6 +137,14 @@ bool test_top(Vhp_top* dut, bool soak)
         <<std::bitset<16>(result)<<" expected result: "<<std::bitset<16>(Case.expected_res.val)<<"\n";
 
         sim_time++;
+
+        if(soak)
+        {
+            if((op1 == 0xFFFF) & (op2 == 0xFFFF))
+            {
+                break;
+            }
+        }
     }
 
     res_file_top.close();
@@ -150,9 +177,17 @@ bool test_mult(Vhp_top* dut, bool soak)
         res_file_mult<<"test case: "<<sim_time<<" Input 1: "<<std::bitset<16>(op1)<<" Input 2: "\
         <<std::bitset<16>(op2)<<" result: "<<std::bitset<16>(res_mult)<<" flags: "\
         <<std::bitset<6>(flags_mult)<<" res mant: "<<std::bitset<22>(res_mant_mult)<<" res exp: "\
-        <<std::bitset<6>(res_exp_mult)<<" shift: "<<std::bitset<4>(dut->shift)<<"\n";
+        <<std::bitset<6>(res_exp_mult)<<" shift: "<<std::bitset<4>(dut->shift)<<" rounding reg: "<<std::bitset<16>(dut->rounding_reg_test)<<"\n";
 
         sim_time++;
+
+        if(soak)
+        {
+            if((op1 == 0xFFFF) & (op2 == 0xFFFF))
+            {
+                break;
+            }
+        }
     }
 
     res_file_mult.close();
@@ -160,29 +195,29 @@ bool test_mult(Vhp_top* dut, bool soak)
 }
 
 
-template<typename T>
 bool test_clz(Vhp_top* dut, bool soak)
 {
     std::string outcome_clz;
 
-    std::ofstream res_file_clz("res_file_clz");
+    std::ofstream res_file_clz("res_file_clz.txt", std::ios::app);
     uint16_t sim_time = 0;
 
     std::random_device dev;
     std::mt19937 rng(dev());
     
 
-    while(sim_time < std::min(MAX_SIM_TIME, 10+NUM_ROUND_BITS))
+    while(sim_time < 10+NUM_ROUND_BITS)
     {   
-        std::uniform_int_distribution<std::mt19937::result_type> dist(1, pow(2, sim_time)-1);
-
-        T top_bit = 1;
-        T test_val = (top_bit<<sim_time) + dist(dev);
-        uint8_t expected_res = get_expected_shift(test_val);
+        std::uniform_int_distribution<std::mt19937::result_type> dist(0, pow(2, sim_time)-1);
+        
+        decltype(dut->clz_test) test_val = (1<<sim_time) + dist(dev);
+        uint8_t expected_res = get_expected_shift(static_cast<uint64_t>(test_val));
 
         dut->clz_test = test_val;
 
         dut->eval();
+
+        decltype(dut->clz_res) clz_res = dut->clz_res;
 
         if(dut->clz_res == expected_res)
         {
@@ -193,8 +228,10 @@ bool test_clz(Vhp_top* dut, bool soak)
             outcome_clz = "FAIL";
         }
 
-        res_file_clz<<"test case: "<<sim_time<<" "<<outcome_clz<<" input: "<<std::bitset<15>(test_val)<<" result: "
-        <<std::bitset<8>(dut->clz_res)<<std::endl;
+        res_file_clz<<"test case: "<<sim_time<<" "<<outcome_clz<<" input: "<<std::bitset<10+NUM_ROUND_BITS>(test_val)<<" result: "
+        <<static_cast<int>(clz_res)<<" expected result: "<<static_cast<int>(expected_res)<<std::endl;
+
+        sim_time++;
     }
 
     res_file_clz.close();
@@ -214,10 +251,10 @@ bool test_class(Vhp_top* dut, bool soak)
         vluint16_t op1 = Case.op1.val;
         vluint16_t op2 = Case.op2.val;
 
-        uint8_t flags_a = Case.op1.flag_arr[0]<<5 + Case.op1.flag_arr[1]<<4 + Case.op1.flag_arr[2]<<3 +\
-                          Case.op1.flag_arr[3]<<2 + Case.op1.flag_arr[4]<<1 + Case.op1.flag_arr[5];
-        uint8_t flags_b = Case.op2.flag_arr[0]<<5 + Case.op2.flag_arr[1]<<4 + Case.op2.flag_arr[2]<<3 +\
-                          Case.op2.flag_arr[3]<<2 + Case.op2.flag_arr[4]<<1 + Case.op2.flag_arr[5];
+        uint8_t flags_a = (Case.op1.flag_arr[0]<<5) + (Case.op1.flag_arr[1]<<4) + (Case.op1.flag_arr[2]<<3) +\
+                          (Case.op1.flag_arr[3]<<2) + (Case.op1.flag_arr[4]<<1) + (Case.op1.flag_arr[5]);
+        uint8_t flags_b = (Case.op2.flag_arr[0]<<5) + (Case.op2.flag_arr[1]<<4) + (Case.op2.flag_arr[2]<<3) +\
+                          (Case.op2.flag_arr[3]<<2) + (Case.op2.flag_arr[4]<<1) + (Case.op2.flag_arr[5]);
 
         dut->src_a = op1;
         dut->src_b = op2;
@@ -248,6 +285,61 @@ bool test_class(Vhp_top* dut, bool soak)
 }
 
 
+bool test_rng(Vhp_top* dut, bool soak)
+{
+    std::ofstream res_file_rng("res_file_rng.txt", std::ios::app);
+    uint16_t sim_time = 0;
+    std::string outcome_rng;
+    FP16::LFSR(NUM_ROUND_BITS, true);
+
+    while(sim_time < MAX_SIM_TIME)
+    { 
+        dut->clk = 0;
+        dut->eval();
+        
+        decltype(dut->rand_out_t) rand_out = dut->rand_out_t;
+        uint16_t expected_rand_out = FP16::LFSR(NUM_ROUND_BITS, false);
+
+        if(static_cast<decltype(dut->rand_out_t)>(expected_rand_out) == rand_out)
+        {
+            outcome_rng = "PASS";
+        }
+        else
+        {
+            outcome_rng = "FAIL";
+        }
+
+        res_file_rng<<"test case: "<<sim_time<<" "<<outcome_rng<<" res: "<<std::bitset<NUM_ROUND_BITS>(dut->rand_out_t)<<" expected res: "<<
+        std::bitset<NUM_ROUND_BITS>(expected_rand_out)<<std::endl;
+
+        sim_time ++; 
+
+        dut->clk = 1;
+        dut->eval();
+    }
+
+    res_file_rng.close();
+    return true;
+}
+
+/* This is more of a dummy function */
+bool test_round(Vhp_top* dut, bool soak)
+{
+    std::ofstream res_file_round("res_file_round.txt", std::ios::app);
+    uint16_t sim_time = 0;
+    std::string outcome_class;
+
+    dut->round_test_in = 0x0FC0;
+    dut->eval();
+    res_file_round<<"should not round up, input: "<<std::bitset<16>(0x0FC0)<<" output: "<<std::bitset<10>(dut->round_test_out)<<std::endl;
+
+    dut->round_test_in = 0x0FE0;
+    dut->eval();
+    res_file_round<<"should round up input: "<<std::bitset<16>(0x0FE0)<<" output: "<<std::bitset<10>(dut->round_test_out);
+
+    return true;
+}
+
 
 
 int main(int argc, char** argv, char** env) {
@@ -260,18 +352,19 @@ int main(int argc, char** argv, char** env) {
     VerilatedVcdC *m_trace = new VerilatedVcdC;
     dut->trace(m_trace, 5);
     m_trace->open("waveform.vcd");
-    uint8_t test_idx = 0;
 
     /* perform resets */
+    dut->reset = 0;
+    dut->clk = 0;
+    dut->eval();
     dut->reset = 1;
     dut->eval();
     dut->reset = 0;
     dut->eval();
 
-    test_top(dut, 0);
-    get_test_case(false, true);
-    test_class(dut, 0);
-
+    /* call test function below */
+    test_mult(dut, 1);
+    /****************************/
 
     m_trace->close();
     delete dut;

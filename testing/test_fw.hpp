@@ -1,7 +1,6 @@
 #ifndef TEST_FW
 #define TEST_FW
 
-#include "../src/FP16_sim.hpp"
 #include <stdlib.h>
 #include <iostream>
 #include <verilated.h>
@@ -10,6 +9,8 @@
 #include <fstream>
 #include <random>
 #include <algorithm>
+
+
 
 
 /* test specification:
@@ -31,7 +32,17 @@ typedef struct test_case
 }test_case;
 
 
-test_case get_test_case(bool soak);
+test_case get_test_case(bool soak, bool reset);
+
+bool test_top(Vhp_top* dut, bool soak);
+
+bool test_mult(Vhp_top* dut, bool soak);
+
+bool test_class(Vhp_top* dut, bool soak);
+
+bool test_clz(Vhp_top* dut, bool soak);
+
+bool test_rng(Vhp_top* dut, bool soak);
 
 
 
