@@ -47,7 +47,7 @@ module hp_top #
     output logic zero, inf, subN, Norm, QNan, SNan,
 
 
-    /* testing outputs */
+    /* testing pins */
     output logic[7:0] flags_a,
     output logic[7:0] flags_b,
     output logic[num_bits-1:0] res_mult_t,
@@ -58,7 +58,13 @@ module hp_top #
 
     input logic[9+num_round_bits:0] clz_test,
     output logic[7:0] clz_res,
-    output logic[num_round_bits-1:0] rand_out_t
+    output logic[num_round_bits-1:0] rand_out_t,
+
+    input logic[mant_width+num_round_bits-1:0] round_test_in,
+    input logic[num_round_bits-1:0] rand_test_in,
+    output logic[mant_width-1:0] round_test_out,
+    output logic[mant_width+num_round_bits-1:0] rounding_reg_test
+
 
 );
 
@@ -93,7 +99,8 @@ module hp_top #
     assign mult_flags_t[1] = mul_res_QNan;
     assign mult_flags_t[0] = mul_res_SNan;
 
-    assign res_mult_t = trunc_result;
+    assign res_mult_t        = trunc_result;
+    assign rounding_reg_test = rounding_reg;
 
 
     /* operation parameters */
@@ -150,6 +157,7 @@ module hp_top #
 
     rng #(num_round_bits) rng(clk, reset, rand_out);
     hp_round #(num_round_bits, num_bits, mant_width) rounding(operation[0], rounding_reg, rand_out, rounded_result);
+    hp_round #(num_round_bits, num_bits, mant_width) rounding_testesr(operation[0], round_test_in, rand_test_in, round_test_out);
 
     clz #(num_round_bits) clz_tester(clz_test, clz_res);
     rng #(num_round_bits) rng_tester(clk, reset, rand_out_t);
@@ -188,8 +196,7 @@ module hp_top #
 
         if(Norm | subN)
         begin
-            res_out[9:0]   = rounded_result;
-            res_out[14:10] = trunc_result[14:10]; 
+            res_out = {trunc_result[15:10], rounded_result};
         end
         else
         begin

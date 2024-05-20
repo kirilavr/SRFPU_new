@@ -180,7 +180,7 @@ module hp_mul #(parameter num_round_bits, parameter num_bits, parameter exp_widt
             else if(res_exp < min_exp)
             begin
                 res_mant   = res_mant >> (min_exp - res_exp);
-                round_mant = res_mant[(mant_width*2)+1:mant_width+2-num_round_bits];
+                round_mant = res_mant[(mant_width*2)-1:mant_width-num_round_bits];
                 result     = {a_src[num_bits-1] ^ b_src[num_bits-1], {exp_width{1'b0}}, res_mant[(mant_width*2)-1:mant_width]};
                 subN       = 1;
             end 
