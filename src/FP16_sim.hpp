@@ -25,6 +25,9 @@
 
 #define TEST_NAN 0x7E00
 
+#define SR 0
+#define NUM_ROUND_BITS 6
+
 typedef struct FP16
 {
     uint16_t val;
@@ -40,6 +43,7 @@ typedef struct FP16
 
     //FP16 operator+(FP16& num2);
 
+    static uint16_t LFSR(uint8_t num_round_bits, bool reset);
 
     private:
 
@@ -49,9 +53,13 @@ typedef struct FP16
 
     void set_inf(bool negative);
 
+    void round(uint32_t &mantissa);
+
 
 }FP16;
 
 
 
 #endif 
+
+

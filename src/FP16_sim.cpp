@@ -155,6 +155,7 @@ FP16 FP16::operator*(FP16& num2)
     else if(res_exp < -14)
     {
         res_mant = res_mant >> (-14 - res_exp);
+        round(res_mant);
         res_exp  = 0;
 
         FP16 ret = FP16(0x0000 + res_sign + ((res_mant>>10)&MANT));
@@ -164,6 +165,7 @@ FP16 FP16::operator*(FP16& num2)
     else
     {
         res_exp += 15;  
+        round(res_mant);
         FP16 ret = FP16(0x0000 + res_sign + (res_exp<<10) + ((res_mant>>10)&MANT));
 
         return ret;
@@ -179,6 +181,23 @@ FP16::operator+(FP16& num2)
 }
 */
 
+void FP16::round(uint32_t &mantissa)
+{
+    if(SR)
+    {
+        uint32_t rand = (uint32_t) LFSR(NUM_ROUND_BITS, 0);
+
+        mantissa += rand<<(10-NUM_ROUND_BITS);
+    }
+    else
+    {
+        if((mantissa & 0x00000200) == 0x00000200)
+        {
+            mantissa += 0x00000200;
+        }
+    }
+}
+
 uint8_t FP16::clz(uint16_t num)
 {
     /* simple implementation */
@@ -187,6 +206,33 @@ uint8_t FP16::clz(uint16_t num)
 
     return shift;
 }
+
+
+uint16_t FP16::LFSR(uint8_t num_round_bits, bool reset)
+{
+    uint16_t start_state = 0xACE1u;  /* Any nonzero start state will work. */
+    static uint16_t lfsr;
+
+    if(reset)
+    {
+        lfsr = start_state;
+        return 0;
+    }
+
+    uint16_t feedback;                    /* Must be 16-bit to allow bit<<15 later in the code */
+    uint16_t rand_out;
+    
+    for(uint8_t bit_idx = 0; bit_idx<num_round_bits; bit_idx++)
+    {
+        /* taps: 16 14 13 11; feedback polynomial: x^16 + x^14 + x^13 + x^11 + 1 */
+        feedback = ((lfsr) ^ (lfsr << 2) ^ (lfsr << 3) ^ (lfsr << 5)) & 0x8000;
+        lfsr = (lfsr>>1) + (feedback);
+    }
+    rand_out = lfsr>>(16-num_round_bits);
+
+    return rand_out;
+}
+
 
 
 
