@@ -45,6 +45,13 @@ FP16::FP16(uint16_t num)
         flag_arr[SNAN_F] = 1;
     }
 
+    else
+    {
+        flag_arr[ZERO_F] = 1;
+        flag_arr[INF_F] = 1;
+        flag_arr[SUB_F] = 1;
+    }
+
 }
 
 

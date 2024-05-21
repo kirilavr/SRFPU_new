@@ -9,6 +9,7 @@
 #include <fstream>
 #include <random>
 #include <algorithm>
+#include "../src/FP16_sim.hpp"
 
 
 
@@ -30,6 +31,20 @@ typedef struct test_case
 
     FP16 expected_res;
 }test_case;
+
+
+enum INSTR : uint8_t 
+{
+    ADD_RN = 0,
+    SUB_RN = 2,
+    MUL_RN = 4,
+    DIV_RN = 6,
+
+    ADD_SR = 1,
+    SUB_SR = 3,
+    MUL_SR = 5,
+    DIV_SR = 7  
+};
 
 
 test_case get_test_case(bool soak, bool reset);

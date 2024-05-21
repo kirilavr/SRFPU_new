@@ -52,7 +52,7 @@ module hp_top #
     output logic[7:0] flags_b,
     output logic[num_bits-1:0] res_mult_t,
     output logic[7:0] mult_flags_t,
-    output logic[5:0] res_exp_t,
+    output logic[6:0] res_exp_t,
     output logic[mant_width*2+1:0] res_mant_t,
     output logic[7:0] shift,
 
@@ -196,7 +196,7 @@ module hp_top #
 
         if(Norm | subN)
         begin
-            res_out = {trunc_result[15:10], rounded_result};
+            res_out = {trunc_result[num_bits-1:mant_width], rounded_result};
         end
         else
         begin

@@ -2,6 +2,7 @@
 
 #define MAX_SIM_TIME 30000000
 #define NUM_ROUND_BITS 6
+#define SR 0
 
 vluint64_t sim_time = 0;
 
@@ -123,7 +124,13 @@ bool test_top(Vhp_top* dut, bool soak)
 
         vluint16_t result  = dut->res_out;
 
-        if(result == Case.expected_res.val)
+        uint8_t flag_res = (dut->zero<<5) + (dut->inf<<4) + (dut->subN<<3) + (dut->Norm<<2) + (dut->QNan<<1) + (dut->SNan);
+
+        uint8_t exp_flag_res = (Case.expected_res.flag_arr[0]<<5) + (Case.expected_res.flag_arr[1]<<4) +\
+                               (Case.expected_res.flag_arr[2]<<3) + (Case.expected_res.flag_arr[3]<<2) +\
+                               (Case.expected_res.flag_arr[4]<<1) + (Case.expected_res.flag_arr[5]);
+
+        if((result == Case.expected_res.val) & (flag_res == exp_flag_res))
         {
             outcome_top = "PASS";
         }
@@ -134,7 +141,10 @@ bool test_top(Vhp_top* dut, bool soak)
 
         res_file_top<<"test case "<<sim_time<<": "<<outcome_top<<" Input 1: "\
         <<std::bitset<16>(op1)<<" Input 2: "<<std::bitset<16>(op2)<<" result: "\
-        <<std::bitset<16>(result)<<" expected result: "<<std::bitset<16>(Case.expected_res.val)<<"\n";
+        <<std::bitset<16>(result)<<" expected result: "<<std::bitset<16>(Case.expected_res.val)
+        <<" flag res: "<<std::bitset<6>(flag_res)<<" exp flag res: "<<std::bitset<6>(exp_flag_res)
+        <<" gay test "<<Case.expected_res.flag_arr[0]<<Case.expected_res.flag_arr[1]<<Case.expected_res.flag_arr[2]<<Case.expected_res.flag_arr[3]<<Case.expected_res.flag_arr[4]<<Case.expected_res.flag_arr[5]
+        <<"\n";
 
         sim_time++;
 
@@ -329,7 +339,7 @@ bool test_round(Vhp_top* dut, bool soak)
     uint16_t sim_time = 0;
     std::string outcome_class;
 
-    dut->round_test_in = 0x0FC0;
+    dut->round_test_in = 0x0060;
     dut->eval();
     res_file_round<<"should not round up, input: "<<std::bitset<16>(0x0FC0)<<" output: "<<std::bitset<10>(dut->round_test_out)<<std::endl;
 
@@ -346,6 +356,7 @@ int main(int argc, char** argv, char** env) {
 
     /* dut model object */
     Vhp_top *dut = new Vhp_top;
+    INSTR instr = MUL_RN;
 
     Verilated::traceEverOn(true);
 
@@ -360,10 +371,11 @@ int main(int argc, char** argv, char** env) {
     dut->reset = 1;
     dut->eval();
     dut->reset = 0;
+    dut->operation = instr;
     dut->eval();
 
     /* call test function below */
-    test_mult(dut, 1);
+    test_top(dut, 1);
     /****************************/
 
     m_trace->close();

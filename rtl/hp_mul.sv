@@ -27,7 +27,7 @@ module hp_mul #(parameter num_round_bits, parameter num_bits, parameter exp_widt
     output logic zero, inf, subN, Norm, QNan, SNan,
 
     /* Test outputs */
-    output logic[exp_width:0]          res_exp_t,
+    output logic[exp_width+1:0]        res_exp_t,
     output logic[(mant_width*2) + 1:0] res_mant_t,
     output logic[7:0]                  shift
 
@@ -36,23 +36,23 @@ module hp_mul #(parameter num_round_bits, parameter num_bits, parameter exp_widt
      * min exponents are -14 and -126 for FP16 and FP32
      * min exponents for normalised subnormals are -24 and -149 
      */
-    localparam signed [exp_width:0]    min_exp      = (num_bits==16) ? {{(exp_width-5){1'b1}}, 6'b110010}: 
-                                                                {2'b11, {(exp_width-5){1'b0}}, 4'b0010};
+    localparam signed [exp_width+1:0]   min_exp      = (num_bits==16) ? {{(exp_width-5){1'b1}}, 7'b1110010}: 
+                                                                        {3'b111, {(exp_width-5){1'b0}}, 4'b0010};
 
-    localparam signed [exp_width:0]    min_exp_subN = (num_bits==16) ? {{(exp_width-5){1'b0}}, 6'b101000}:
-                                                                       {{(exp_width-5)/3{3'b101}}, 6'b101011};
+    localparam signed [exp_width+1:0]     min_exp_subN = (num_bits==16) ? {{(exp_width-5){1'b0}}, 7'b1101000}:
+                                                                          {{(exp_width-5)/3{3'b110}}, 7'b1101011};
     
     /* Max exp for FP16 = 15 and for FP32 = 127, the biases are equivalent to the maximums*/
-    localparam signed [exp_width:0]  max_exp = (num_bits==16) ?  {{(exp_width-5){1'b0}}, 6'b001111}: 
-                                                                 {6'b001111, {(exp_width-5){1'b1}}};
+    localparam signed [exp_width+1:0]  max_exp = (num_bits==16) ?  {{(exp_width-5){1'b0}}, 7'b0001111}: 
+                                                                   {7'b0001111, {(exp_width-5){1'b1}}};
 
-    localparam signed [exp_width:0]  bias    = (num_bits==16) ?  {{(exp_width-5){1'b0}}, 6'd15}: 
-                                                                 {6'b001111, {(exp_width-5){1'b1}}};
+    localparam signed [exp_width+1:0]  bias    = (num_bits==16) ?  {{(exp_width-5){1'b0}}, 7'd15}: 
+                                                                   {7'b0001111, {(exp_width-5){1'b1}}};
 
 
-    logic signed [exp_width:0]        a_exp, b_exp;
+    logic signed [exp_width+1:0]      a_exp, b_exp;
     logic        [mant_width:0]       a_mant, b_mant;
-    logic signed [exp_width:0]        res_exp;
+    logic signed [exp_width+1:0]      res_exp;
     logic        [(mant_width*2)+1:0] res_mant;
 
     logic        [mant_width + num_round_bits - 1:0]  clz_rin;
@@ -63,9 +63,6 @@ module hp_mul #(parameter num_round_bits, parameter num_bits, parameter exp_widt
 
     /*clz_rin is a register for the count leading zeros module which is combinatorial and is used to deal with subNs.*/
     clz #(num_round_bits) clz(clz_rin, clz_rout);
-
-    assign a_exp  = $signed({1'b0, a_src[num_bits-2:num_bits-exp_width-1]}) - bias;
-    assign b_exp  = $signed({1'b0, b_src[num_bits-2:num_bits-exp_width-1]}) - bias;
 
     /* output testing */
     assign res_exp_t  = res_exp;
@@ -126,9 +123,9 @@ module hp_mul #(parameter num_round_bits, parameter num_bits, parameter exp_widt
             /* clz */
             clz_rin =  {a_src[mant_width-1:0], {num_round_bits{1'b0}}};
             a_mant  =  {1'b1, a_src[mant_width-1:0] << (clz_rout + 1)};
-            a_exp   =  -(clz_rout[exp_width:0] + bias);
+            a_exp   =  -$signed(clz_rout[exp_width+1:0]) - bias;
 
-            b_exp   =  b_src[num_bits-2:num_bits-exp_width-1] - bias;
+            b_exp   =  {{2{1'b0}}, b_src[num_bits-2:num_bits-exp_width-1]} - bias;
             b_mant  =  {1'b1, b_src[mant_width-1:0]};
         end
         
@@ -137,19 +134,19 @@ module hp_mul #(parameter num_round_bits, parameter num_bits, parameter exp_widt
             /* clz */
             clz_rin =  {b_src[mant_width-1:0], {num_round_bits{1'b0}}};
             b_mant  =  {1'b1, b_src[mant_width-1:0] << (clz_rout + 1)};
-            b_exp   =  -(clz_rout[exp_width:0] + bias);
+            b_exp   =  -$signed(clz_rout[exp_width+1:0]) - bias;
 
-            a_exp   =  a_src[num_bits-2:num_bits-exp_width-1] - bias;
+            a_exp   =  {{2{1'b0}}, a_src[num_bits-2:num_bits-exp_width-1]} - bias;
             a_mant  =  {1'b1, a_src[mant_width-1:0]};
         end
 
         else 
         begin 
 
-            a_exp   = a_src[num_bits-2:num_bits-exp_width-1] - bias;
+            a_exp   = {2'b00, a_src[num_bits-2:num_bits-exp_width-1]} - bias;
             a_mant  = {1'b1, a_src[mant_width-1:0]};
 
-            b_exp   = b_src[num_bits-2:num_bits-exp_width-1] - bias;
+            b_exp   = {2'b00, b_src[num_bits-2:num_bits-exp_width-1]} - bias;
             b_mant  = {1'b1, b_src[mant_width-1:0]};
         end 
 
