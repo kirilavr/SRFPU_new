@@ -35,7 +35,7 @@ clean:
 	rm -rf .stamp.*;
 	rm -rf ./obj_dir
 	rm -rf waveform.vcd
-	rm -rf res_file_top.txt
-	rm -rf res_file_class.txt
-	rm -rf res_file_mult.txt
-	rm -rf res_file_clz.txt
+	rm -rf res_file_muldiv_norm.txt
+	rm -rf res_file_muldiv.txt
+	rm -rf res_file_muldiv_pre.txt
+	rm -rf res_file_muldiv_top.txt

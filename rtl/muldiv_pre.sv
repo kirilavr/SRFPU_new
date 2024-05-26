@@ -85,10 +85,10 @@ module muldiv_pre #(parameter num_bits, parameter exp_width, parameter mant_widt
         begin
             arithmetic = 1;
 
-            mantA        = b_src[mant_width-1:0];
-            mantB        = a_src[mant_width-1:0];
+            mantA      = b_src[mant_width-1:0];
+            mantB      = a_src[mant_width-1:0];
 
-            exp_b      =  {{2{1'b0}}, b_src[num_bits-2:num_bits-exp_width-1]} - bias;
+            exp_b      =  {{2{1'b0}}, b_src[num_bits-2:num_bits-exp_width-1]} - bias + 1;
             exp_a      =  {{2{1'b0}}, a_src[num_bits-2:num_bits-exp_width-1]} - bias;
         end
 
@@ -97,10 +97,10 @@ module muldiv_pre #(parameter num_bits, parameter exp_width, parameter mant_widt
         begin
             arithmetic = 1;
 
-            mantA        = a_src[mant_width-1:0];
-            mantB        = b_src[mant_width-1:0];
+            mantA      = a_src[mant_width-1:0];
+            mantB      = b_src[mant_width-1:0];
 
-            exp_a      =  {{2{1'b0}}, a_src[num_bits-2:num_bits-exp_width-1]} - bias;
+            exp_a      =  {{2{1'b0}}, a_src[num_bits-2:num_bits-exp_width-1]} - bias + (a_subN ? 1 : 0);
             exp_b      =  {{2{1'b0}}, b_src[num_bits-2:num_bits-exp_width-1]} - bias;
         end
     end

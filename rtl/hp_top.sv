@@ -31,15 +31,17 @@
  * inputs: 16 bit operands "a" and "b", 3 bit input to determine operation
  * outputs: 16 bit result of operation with flags
  */
+
+
+`define debug_mode
+
 module hp_top #
 (
     parameter num_round_bits = 6, 
     parameter num_bits = 16,
 
     parameter exp_width  = (num_bits == 16) ? 5  : 8,
-    parameter mant_width = (num_bits == 16) ? 10 : 23,
-
-    parameter debug_mode = 1
+    parameter mant_width = (num_bits == 16) ? 10 : 23
 )
 (   
     input logic clk,
@@ -53,19 +55,52 @@ module hp_top #
     output logic[num_bits-1:0] res_out,
     output logic zero, inf, subN, Norm, QNan, SNan
 
+
+    /*testing output*/ 
+    `ifdef debug_mode
+        ,
+        /* test outputs: muldiv_pre */
+        output logic [mant_width-1:0] muldiv_pre_test_mantA,
+        output logic [mant_width-1:0] muldiv_pre_test_mantB,
+
+        output logic [exp_width+1:0] muldiv_pre_test_expA,
+        output logic [exp_width+1:0] muldiv_pre_test_expB,
+
+        output logic                 muldiv_pre_test_arithmetic,
+        output logic [num_bits-1:0]  muldiv_pre_test_direct_result,
+        output logic                 muldiv_pre_test_sign,
+
+
+        /* testing_outputs: muldiv */
+        output logic [mant_width*2+1:0] muldiv_test_unnorm_mant,
+        output logic [exp_width+1:0]    muldiv_test_unnorm_exp,
+
+        /* testing_outputs: muldiv_norm */
+        output logic [mant_width+num_round_bits-1:0] muldiv_norm_test_unrounded_mant,
+        output logic [exp_width+1:0]                 muldiv_norm_test_unrounded_exp,
+
+        output logic [5:0] flag_test,
+
+        output logic [num_round_bits-1:0] rand_test,
+
+        output logic [exp_width+1:0] shift_test,
+
+        output logic [mant_width:0] round_out_test
+
+    `endif
 );
 
-    parameter signed [exp_width+1:0]  bias    = (num_bits==16) ?  {{(exp_width-5){1'b0}}, 7'd15}: 
-                                                                   {7'b0001111, {(exp_width-5){1'b1}}};
+    parameter signed [exp_width+1:0] bias          = (num_bits==16) ? {{(exp_width-5){1'b0}}, 7'd15}: 
+                                                                      {7'b0001111, {(exp_width-5){1'b1}}};
 
-    parameter signed [exp_width+1:0]   min_exp      = (num_bits==16) ? {{(exp_width-5){1'b1}}, 7'b1110010}: 
-                                                                        {3'b111, {(exp_width-5){1'b0}}, 4'b0010};
+    parameter signed [exp_width+1:0] min_exp       = (num_bits==16) ? {{(exp_width-5){1'b1}}, 7'b1110010}: 
+                                                                      {3'b111, {(exp_width-5){1'b0}}, 4'b0010};
 
-    parameter signed [exp_width+1:0]  max_exp = (num_bits==16) ?  {{(exp_width-5){1'b0}}, 7'b0001111}: 
-                                                                   {7'b0001111, {(exp_width-5){1'b1}}};
+    parameter signed [exp_width+1:0] max_exp       = (num_bits==16) ? {{(exp_width-5){1'b0}}, 7'b0001111}: 
+                                                                      {7'b0001111, {(exp_width-5){1'b1}}};
 
-    localparam signed [exp_width+1:0]     min_exp_subN = (num_bits==16) ? {{(exp_width-5){1'b0}}, 7'b1101000}:
-                                                                    {{(exp_width-5)/3{3'b110}}, 7'b1101011};
+    localparam signed [exp_width+1:0] min_exp_subN = (num_bits==16) ? {{(exp_width-5){1'b0}}, 7'b1101000}:
+                                                                      {{(exp_width-5)/3{3'b110}}, 7'b1101011};
     
 
     wire[num_bits-1:0] result_mult;
@@ -142,6 +177,7 @@ module hp_top #
 
     logic[mant_width+num_round_bits-1:0] clz_in;
     logic[exp_width+1:0]                 clz_out;
+    logic                                clz_shift;
 
     logic[mant_width+num_round_bits-1:0] round_in;
     logic[mant_width:0]                  round_out;
@@ -149,6 +185,43 @@ module hp_top #
     wire [num_round_bits-1:0]            rand_bits;
     wire                                 arithmetic_add;
     wire                                 arithmetic_mult;
+
+
+    /* assignments to test pins */
+    `ifdef debug_mode
+
+    assign muldiv_pre_test_mantA           = mantA_mul;
+    assign muldiv_pre_test_mantB           = mantB_mul; 
+
+    assign muldiv_pre_test_expA            = expA_mul;
+    assign muldiv_pre_test_expB            = expB_mul;
+
+    assign muldiv_pre_test_arithmetic      = arithmetic_mult;
+    assign muldiv_pre_test_direct_result   = direct_result_mul;
+    assign muldiv_pre_test_sign            = sign_mul;
+
+    assign muldiv_test_unnorm_mant         = unnorm_mant_mul;
+    assign muldiv_test_unnorm_exp          = unnorm_exp_mul;
+
+    assign muldiv_norm_test_unrounded_mant = unrounded_mant_mul;
+    assign muldiv_norm_test_unrounded_exp  = unrounded_exp_mul;
+
+    assign rand_test                       = rand_bits;
+
+    assign shift_test                      = clz_out;
+
+    assign round_out_test                  = round_out;
+
+    assign flag_test[5] = zero;
+    assign flag_test[4] = inf; 
+    assign flag_test[3] = subN;
+    assign flag_test[2] = Norm;
+    assign flag_test[1] = QNan;
+    assign flag_test[0] = SNan;
+    `endif
+
+
+    assign clz_shift = a_subN | b_subN;
 
     classifier #(num_bits, exp_width, mant_width) classifier_1(src_a, a_zero, a_inf, a_subN, a_Norm, a_QNan, a_SNan);
     classifier #(num_bits, exp_width, mant_width) classifier_2(src_b, b_zero, b_inf, b_subN, b_Norm, b_QNan, b_SNan);
@@ -166,9 +239,9 @@ module hp_top #
                  mul_res_zero, mul_res_inf, mul_res_subN, mul_res_Norm, mul_res_QNan, mul_res_SNan);
 
     muldiv #(num_round_bits, exp_width, mant_width) muldiv_inst
-            (mantA_mul, mantB_mul, expA_mul, expB_mul, clz_out, unnorm_mant_mul, unnorm_exp_mul);
+            (mantA_mul, mantB_mul, expA_mul, expB_mul, clz_out, clz_shift, unnorm_mant_mul, unnorm_exp_mul);
 
-    normaliser_muldiv #(num_round_bits, mant_width, exp_width) normaliser_muldiv_inst
+    normaliser_muldiv #(num_round_bits, mant_width, exp_width, min_exp) normaliser_muldiv_inst
                        (unnorm_mant_mul, unnorm_exp_mul, unrounded_mant_mul, unrounded_exp_mul);
 
 
@@ -188,6 +261,13 @@ module hp_top #
 
     always_comb
     begin
+
+        zero = 0;
+        inf  = 0;
+        subN = 0;
+        Norm = 0;
+        QNan = 0;
+        SNan = 0;
 
         case(operation)
             ADD_RN,
@@ -233,19 +313,21 @@ module hp_top #
                     round_in = unrounded_mant_mul;
                     res_exp  = round_out[mant_width] ? unrounded_exp_mul + 1 + bias : unrounded_exp_mul + bias;
 
-                    if(res_exp == max_exp)
+                    if(res_exp > max_exp+bias)
                     begin 
                         inf     = 1;
-                        res_out = {sign_mul, max_exp[exp_width-1:0], {mant_width{1'b0}}};
+                        res_out = {sign_mul, {exp_width{1'b1}}, {mant_width{1'b0}}};
                     end
-                    else if(round_out == 0 & res_exp == 0)
+                    else if((res_exp == 0) & (round_out == 0))
                     begin 
                         zero    = 1;
                         res_out = {sign_mul, {exp_width{1'b0}}, {mant_width{1'b0}}}; 
                     end
-                    else 
-                    begin
-                        Norm    = 1;
+                    else
+                    begin 
+                        Norm = res_exp >  0 ? 1 : 0;
+                        subN = res_exp == 0 ? 1 : 0;
+                
                         res_out = {sign_mul, res_exp[exp_width-1:0], round_out[mant_width-1:0]};
                     end
                 end 

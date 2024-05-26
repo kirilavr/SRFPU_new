@@ -140,6 +140,8 @@ FP16 FP16::operator*(FP16& num2)
     res_sign = sign ^ num2.sign;
     res_exp  = exp  + num2.exp;
     res_mant = mant * num2.mant;
+    //std::cout<<(int)res_exp<<std::endl;
+    //std::cout<<std::bitset<22>(res_mant)<<std::endl;
 
     if((res_mant & (POINT32<<1)) == POINT32<<1)
     {
@@ -153,7 +155,7 @@ FP16 FP16::operator*(FP16& num2)
         return ret;
     }
 
-    else if(res_exp < -24)
+    else if(res_exp < -24 - NUM_ROUND_BITS)
     {
         FP16 ret = FP16(res_sign == POS_ZERO ? POS_ZERO : NEG_ZERO);
         return ret;
@@ -161,11 +163,23 @@ FP16 FP16::operator*(FP16& num2)
 
     else if(res_exp < -14)
     {
-        res_mant = res_mant >> (-14 - res_exp);
-        round(res_mant);
-        res_exp  = 0;
 
-        FP16 ret = FP16(0x0000 + res_sign + ((res_mant>>10)&MANT));
+
+        res_mant = res_mant >> (-14 - res_exp);
+        res_exp  = 0;
+        //std::cout<<std::bitset<22>(res_mant)<<std::endl;
+        round(res_mant);
+        //std::cout<<std::bitset<22>(res_mant)<<std::endl;
+
+        if((res_mant&(POINT32)) == POINT32)
+        {
+            res_exp += 1;
+        }
+        //std::cout<<std::bitset<10>(res_mant>>10)<<std::endl;
+        //std::cout<<(int)res_exp<<std::endl;
+
+        FP16 ret = FP16((((uint16_t)res_exp)<<10) + res_sign + (((uint16_t)(res_mant>>10))&MANT));
+        //std::cout<<std::bitset<16>(ret.val)<<std::endl;
         return ret;
     }
 
@@ -173,6 +187,17 @@ FP16 FP16::operator*(FP16& num2)
     {
         res_exp += 15;  
         round(res_mant);
+
+        //std::cout<<std::bitset<22>(res_mant)<<std::endl;
+
+        if((res_mant&(POINT32<<1)) == (POINT32<<1))
+        {
+            res_mant >>= 1;
+            res_exp += 1;
+        }
+
+        //std::cout<<std::bitset<22>(res_mant)<<std::endl;
+
         FP16 ret = FP16(0x0000 + res_sign + (res_exp<<10) + ((res_mant>>10)&MANT));
 
         return ret;
@@ -198,10 +223,7 @@ void FP16::round(uint32_t &mantissa)
     }
     else
     {
-        if((mantissa & 0x00000200) == 0x00000200)
-        {
-            mantissa += 0x00000200;
-        }
+        mantissa += 0x00000200;
     }
 }
 
@@ -241,6 +263,13 @@ uint16_t FP16::LFSR(uint8_t num_round_bits, bool reset)
 }
 
 
+// int main()
+// {
+//     FP16 fp1 = FP16(0b0000000100110000);
+//     FP16 fp2 = FP16(0b0100001010111100);
+
+//     FP16 res = fp1*fp2;
+// }
 
 
 // FP16::set_zero(bool negative)

@@ -1,6 +1,6 @@
 #include "test_fw.hpp"
 
-#define MAX_SIM_TIME 30000000
+#define MAX_SIM_TIME 100000
 #define NUM_ROUND_BITS 6
 #define SR 0
 
@@ -105,11 +105,41 @@ uint8_t get_expected_shift(uint64_t test_val)
 }
 
 
-bool test_top(Vhp_top* dut, bool soak)
+
+
+
+bool test_muldiv(Vhp_top* dut, bool soak)
 {
-    std::ofstream res_file_top("res_file_top.txt", std::ios::app);
+    std::ofstream res_file_muldiv_pre("res_file_muldiv_pre.txt", std::ios::app);
+    std::ofstream res_file_muldiv("res_file_muldiv.txt", std::ios::app);
+    std::ofstream res_file_muldiv_norm("res_file_muldiv_norm.txt", std::ios::app);
+    std::ofstream res_file_muldiv_top("res_file_muldiv_top.txt", std::ios::app);
     uint16_t sim_time = 0;
-    std::string outcome_top;
+
+    std::string outcome;
+
+    vluint16_t mantA;
+    vluint16_t mantB;
+
+    vluint8_t expA;
+    vluint8_t expB;
+
+    vluint8_t arithmetic;
+    vluint16_t direct_res;
+    vluint8_t sign;
+
+    vluint32_t unnorm_mant;
+    vluint8_t unnorm_exp;
+
+    vluint16_t unrounded_mant;
+    vluint8_t unrounded_exp;
+
+    vluint16_t result;
+    vluint8_t flag_test;
+
+    int shift_test;
+
+    uint8_t exp_flags;
 
     while(sim_time < MAX_SIM_TIME)
     {
@@ -120,31 +150,54 @@ bool test_top(Vhp_top* dut, bool soak)
         dut->src_a = op1;
         dut->src_b = op2;
 
+        dut->operation = 0x04;
+
         dut->eval();
 
-        vluint16_t result  = dut->res_out;
+        mantA = dut->muldiv_pre_test_mantA;
+        mantB = dut->muldiv_pre_test_mantB;
 
-        uint8_t flag_res = (dut->zero<<5) + (dut->inf<<4) + (dut->subN<<3) + (dut->Norm<<2) + (dut->QNan<<1) + (dut->SNan);
+        expA = dut->muldiv_pre_test_expA;
+        expB = dut->muldiv_pre_test_expB;
 
-        uint8_t exp_flag_res = (Case.expected_res.flag_arr[0]<<5) + (Case.expected_res.flag_arr[1]<<4) +\
-                               (Case.expected_res.flag_arr[2]<<3) + (Case.expected_res.flag_arr[3]<<2) +\
-                               (Case.expected_res.flag_arr[4]<<1) + (Case.expected_res.flag_arr[5]);
+        arithmetic = dut->muldiv_pre_test_arithmetic;
+        direct_res = dut->muldiv_pre_test_direct_result;
+        sign = dut->muldiv_pre_test_sign;
 
-        if((result == Case.expected_res.val) & (flag_res == exp_flag_res))
+        unnorm_mant = dut->muldiv_test_unnorm_mant;
+        unnorm_exp = dut->muldiv_test_unnorm_exp;
+
+        unrounded_mant = dut->muldiv_norm_test_unrounded_mant;
+        unrounded_exp = dut->muldiv_norm_test_unrounded_exp;
+
+        shift_test = dut->shift_test;
+
+        result = dut->res_out;
+        flag_test = dut->flag_test;
+
+        exp_flags = (Case.expected_res.flag_arr[0]<<5) + (Case.expected_res.flag_arr[1]<<4) + (Case.expected_res.flag_arr[2]<<3) +\
+                    (Case.expected_res.flag_arr[3]<<2) + (Case.expected_res.flag_arr[4]<<1) + (Case.expected_res.flag_arr[5]);
+
+        if(result == Case.expected_res.val)
         {
-            outcome_top = "PASS";
+            outcome = "PASS";
         }
-        else
+        else 
         {
-            outcome_top = "FAIL";
+            outcome = "FAIL";
         }
 
-        res_file_top<<"test case "<<sim_time<<": "<<outcome_top<<" Input 1: "\
-        <<std::bitset<16>(op1)<<" Input 2: "<<std::bitset<16>(op2)<<" result: "\
-        <<std::bitset<16>(result)<<" expected result: "<<std::bitset<16>(Case.expected_res.val)
-        <<" flag res: "<<std::bitset<6>(flag_res)<<" exp flag res: "<<std::bitset<6>(exp_flag_res)
-        <<" gay test "<<Case.expected_res.flag_arr[0]<<Case.expected_res.flag_arr[1]<<Case.expected_res.flag_arr[2]<<Case.expected_res.flag_arr[3]<<Case.expected_res.flag_arr[4]<<Case.expected_res.flag_arr[5]
-        <<"\n";
+        res_file_muldiv_pre<<"test case "<<sim_time<<" input 1: "<<std::bitset<16>(op1)<<" input 2: "<<std::bitset<16>(op2)\
+                           <<" mantA: "<<std::bitset<10>(mantA)<<" mantB: "<<std::bitset<10>(mantB)<<" expA: "<<std::bitset<7>(expA)
+                           <<" expB: "<<std::bitset<10>(expB)<<" arithmetic: "<<arithmetic<<" dir_res: "<<std::bitset<16>(direct_res)
+                           <<" sign: "<<sign<<"\n";
+
+        res_file_muldiv<<"test case "<<sim_time<<" unnorm mant: "<<std::bitset<22>(unnorm_mant)<<" unnorm exp: "<<std::bitset<7>(unnorm_exp)<<" shift: "<<shift_test<<"\n";
+
+        res_file_muldiv_norm<<"test case "<<sim_time<<" unrounded mant: "<<std::bitset<16>(unrounded_mant)<<" unrounded_exp: "<<std::bitset<7>(unrounded_exp)<<"\n";
+
+        res_file_muldiv_top<<"test case "<<sim_time<<":"<<outcome<<" res out: "<<std::bitset<16>(result)<<" flags: "<<std::bitset<6>(flag_test)\
+                           <<" expected res: "<<std::bitset<16>(Case.expected_res.val)<<" expected flags: "<<std::bitset<6>(exp_flags)<<" round_out: "<<std::bitset<11>(dut->round_out_test)<<"\n";
 
         sim_time++;
 
@@ -157,140 +210,11 @@ bool test_top(Vhp_top* dut, bool soak)
         }
     }
 
-    res_file_top.close();
+    res_file_muldiv_pre.close();
+    res_file_muldiv.close();
+    res_file_muldiv_norm.close();
+    res_file_muldiv_top.close();
 
-    return true;
-}
-
-
-bool test_mult(Vhp_top* dut, bool soak)
-{
-    std::ofstream res_file_mult("res_file_mult.txt", std::ios::app);
-    uint16_t sim_time = 0;
-
-    while(sim_time < MAX_SIM_TIME)
-    {
-        test_case Case = get_test_case(soak, false);
-        vluint16_t op1 = Case.op1.val;
-        vluint16_t op2 = Case.op2.val;
-
-        dut->src_a = op1;
-        dut->src_b = op2;
-
-        dut->eval();
-
-        vluint16_t res_mult  = dut->res_mult_t;
-        vluint8_t flags_mult = dut->mult_flags_t;
-        vluint8_t res_exp_mult = dut->res_exp_t;
-        vluint32_t res_mant_mult = dut->res_mant_t;
-
-        res_file_mult<<"test case: "<<sim_time<<" Input 1: "<<std::bitset<16>(op1)<<" Input 2: "\
-        <<std::bitset<16>(op2)<<" result: "<<std::bitset<16>(res_mult)<<" flags: "\
-        <<std::bitset<6>(flags_mult)<<" res mant: "<<std::bitset<22>(res_mant_mult)<<" res exp: "\
-        <<std::bitset<6>(res_exp_mult)<<" shift: "<<std::bitset<4>(dut->shift)<<" rounding reg: "<<std::bitset<16>(dut->rounding_reg_test)<<"\n";
-
-        sim_time++;
-
-        if(soak)
-        {
-            if((op1 == 0xFFFF) & (op2 == 0xFFFF))
-            {
-                break;
-            }
-        }
-    }
-
-    res_file_mult.close();
-    return true;
-}
-
-
-bool test_clz(Vhp_top* dut, bool soak)
-{
-    std::string outcome_clz;
-
-    std::ofstream res_file_clz("res_file_clz.txt", std::ios::app);
-    uint16_t sim_time = 0;
-
-    std::random_device dev;
-    std::mt19937 rng(dev());
-    
-
-    while(sim_time < 10+NUM_ROUND_BITS)
-    {   
-        std::uniform_int_distribution<std::mt19937::result_type> dist(0, pow(2, sim_time)-1);
-        
-        decltype(dut->clz_test) test_val = (1<<sim_time) + dist(dev);
-        uint8_t expected_res = get_expected_shift(static_cast<uint64_t>(test_val));
-
-        dut->clz_test = test_val;
-
-        dut->eval();
-
-        decltype(dut->clz_res) clz_res = dut->clz_res;
-
-        if(dut->clz_res == expected_res)
-        {
-            outcome_clz = "PASS";
-        }
-        else
-        {
-            outcome_clz = "FAIL";
-        }
-
-        res_file_clz<<"test case: "<<sim_time<<" "<<outcome_clz<<" input: "<<std::bitset<10+NUM_ROUND_BITS>(test_val)<<" result: "
-        <<static_cast<int>(clz_res)<<" expected result: "<<static_cast<int>(expected_res)<<std::endl;
-
-        sim_time++;
-    }
-
-    res_file_clz.close();
-    return true;
-}
-
-
-bool test_class(Vhp_top* dut, bool soak)
-{
-    std::ofstream res_file_class("res_file_class.txt", std::ios::app);
-    uint16_t sim_time = 0;
-    std::string outcome_class;
-
-    while(sim_time < MAX_SIM_TIME)
-    {
-        test_case Case = get_test_case(soak, false);
-        vluint16_t op1 = Case.op1.val;
-        vluint16_t op2 = Case.op2.val;
-
-        uint8_t flags_a = (Case.op1.flag_arr[0]<<5) + (Case.op1.flag_arr[1]<<4) + (Case.op1.flag_arr[2]<<3) +\
-                          (Case.op1.flag_arr[3]<<2) + (Case.op1.flag_arr[4]<<1) + (Case.op1.flag_arr[5]);
-        uint8_t flags_b = (Case.op2.flag_arr[0]<<5) + (Case.op2.flag_arr[1]<<4) + (Case.op2.flag_arr[2]<<3) +\
-                          (Case.op2.flag_arr[3]<<2) + (Case.op2.flag_arr[4]<<1) + (Case.op2.flag_arr[5]);
-
-        dut->src_a = op1;
-        dut->src_b = op2;
-
-        dut->eval();
-
-        if((flags_a == dut->flags_a) & (flags_b == dut->flags_b))
-        {
-            outcome_class = "PASS";
-        }
-        else
-        {
-            outcome_class = "FAIL";
-        }
-
-        
-        res_file_class<<"test_case: "<<sim_time<<" "<<outcome_class<<" flags a: "<<
-        std::bitset<6>(dut->flags_a)<<" flags b: "<<std::bitset<6>(dut->flags_b)<<" expected flags a: "
-        <<std::bitset<6>(flags_a)<<" expected flags b: "<<std::bitset<6>(flags_b)<<std::endl;
-
-        
-
-        sim_time++;
-    }
-
-    res_file_class.close();
     return true;
 }
 
@@ -307,10 +231,10 @@ bool test_rng(Vhp_top* dut, bool soak)
         dut->clk = 0;
         dut->eval();
         
-        decltype(dut->rand_out_t) rand_out = dut->rand_out_t;
+        decltype(dut->rand_test) rand_out = dut->rand_test;
         uint16_t expected_rand_out = FP16::LFSR(NUM_ROUND_BITS, false);
 
-        if(static_cast<decltype(dut->rand_out_t)>(expected_rand_out) == rand_out)
+        if(static_cast<decltype(dut->rand_test)>(expected_rand_out) == rand_out)
         {
             outcome_rng = "PASS";
         }
@@ -319,7 +243,7 @@ bool test_rng(Vhp_top* dut, bool soak)
             outcome_rng = "FAIL";
         }
 
-        res_file_rng<<"test case: "<<sim_time<<" "<<outcome_rng<<" res: "<<std::bitset<NUM_ROUND_BITS>(dut->rand_out_t)<<" expected res: "<<
+        res_file_rng<<"test case: "<<sim_time<<" "<<outcome_rng<<" res: "<<std::bitset<NUM_ROUND_BITS>(dut->rand_test)<<" expected res: "<<
         std::bitset<NUM_ROUND_BITS>(expected_rand_out)<<std::endl;
 
         sim_time ++; 
@@ -329,24 +253,6 @@ bool test_rng(Vhp_top* dut, bool soak)
     }
 
     res_file_rng.close();
-    return true;
-}
-
-/* This is more of a dummy function */
-bool test_round(Vhp_top* dut, bool soak)
-{
-    std::ofstream res_file_round("res_file_round.txt", std::ios::app);
-    uint16_t sim_time = 0;
-    std::string outcome_class;
-
-    dut->round_test_in = 0x0060;
-    dut->eval();
-    res_file_round<<"should not round up, input: "<<std::bitset<16>(0x0FC0)<<" output: "<<std::bitset<10>(dut->round_test_out)<<std::endl;
-
-    dut->round_test_in = 0x0FE0;
-    dut->eval();
-    res_file_round<<"should round up input: "<<std::bitset<16>(0x0FE0)<<" output: "<<std::bitset<10>(dut->round_test_out);
-
     return true;
 }
 
@@ -375,7 +281,7 @@ int main(int argc, char** argv, char** env) {
     dut->eval();
 
     /* call test function below */
-    test_top(dut, 1);
+    test_muldiv(dut, 1);
     /****************************/
 
     m_trace->close();
