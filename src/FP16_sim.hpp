@@ -25,7 +25,13 @@
 
 #define TEST_NAN 0x7E00
 
+#define DEBUG_MODE 0
+
 #define SR 0
+#define NUM_BITS 16
+#define MIN_EXP -14
+#define MANT_WIDTH 10
+#define EXP_WIDTH 5
 #define NUM_ROUND_BITS 6
 
 typedef struct FP16
@@ -41,11 +47,15 @@ typedef struct FP16
 
     FP16 operator*(FP16& num2);
 
-    //FP16 operator+(FP16& num2);
+    FP16 operator+(FP16& num2);
 
     static uint16_t LFSR(uint8_t num_round_bits, bool reset);
 
     private:
+
+    int16_t align_mantissas(uint32_t &mant_a, uint32_t &mant_b, int16_t &exp_a, int16_t &exp_b);
+
+    void normalise_addsub(uint32_t &mant, int16_t &res_exp);
 
     static uint8_t clz(uint16_t);
 
@@ -55,10 +65,10 @@ typedef struct FP16
 
     void round(uint32_t &mantissa);
 
+    void round_addsub(uint32_t &mantissa);
+
 
 }FP16;
-
-
 
 #endif 
 

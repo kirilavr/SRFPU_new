@@ -1,6 +1,6 @@
 `include "./rtl/clz"
 
-module addsub #(parameter num_round_bits, parameter num_bits, parameter exp_width, parameter mant_width, parameter bias)
+module addsub #(parameter num_round_bits, parameter num_bits, parameter exp_width, parameter mant_width, parameter signed bias)
 (
     input logic[num_bits-1:0] a_src,
     
@@ -26,7 +26,10 @@ module addsub #(parameter num_round_bits, parameter num_bits, parameter exp_widt
     output logic                                sign,
     output logic                                arithmetic,
     
-    output logic zero, inf, subN, Norm, QNan, SNan
+    output logic zero, inf, subN, Norm, QNan, SNan,
+
+    output logic [6:0] exp_test_a,
+    output logic [6:0] exp_test_b
 );
 
     logic signed [exp_width+1:0]                     res_exp;
@@ -37,21 +40,27 @@ module addsub #(parameter num_round_bits, parameter num_bits, parameter exp_widt
     logic signed [exp_width+1:0]                     exp_a;
     logic signed [exp_width+1:0]                     exp_b;
 
+    wire                                             diff_sign;
+    
+    assign diff_sign = a_src[num_bits-1] ^ b_src[num_bits-1];
 
     always_comb 
     begin
-        exp_a = $signed({2'b00, a_src[num_bits-2:mant_width]})-bias;
-        exp_b = $signed({2'b00, b_src[num_bits-2:mant_width]})-bias;
+        exp_a = $signed({2'b00, a_src[num_bits-2:mant_width]}) - (a_subN ? (bias-1) : bias);
+        exp_b = $signed({2'b00, b_src[num_bits-2:mant_width]}) - (b_subN ? (bias-1) : bias);
 
-        zero = 0;
-        inf = 0;
-        subN = 0;
-        Norm = 0;
-        QNan = 0;
-        SNan = 0;
-        res_exp        = 0;
-        res_exp = 0;
-        sign = 0;
+        exp_test_a = exp_a;
+        exp_test_b = exp_b;
+
+        zero       = 0;
+        inf        = 0;
+        subN       = 0;
+        Norm       = 0;
+        QNan       = 0;
+        SNan       = 0;
+        res_exp    = 0;
+        res_exp    = 0;
+        sign       = 0;
         arithmetic = 0;
         
         /* Special result classification */
@@ -67,36 +76,38 @@ module addsub #(parameter num_round_bits, parameter num_bits, parameter exp_widt
             direct_result  = (a_QNan == 1) ? a_src : b_src;
         end
 
-        else if(a_inf & b_inf & (a_src[num_bits-1] ^ b_src[num_bits-1]))
+        else if(a_inf & b_inf)
         begin
-            QNan   = 1;
-            direct_result = 16'b0111111000000000;
+            if(diff_sign)
+            begin
+                QNan   = 1;
+                direct_result = 16'b0111111000000000;
+            end
+            else
+            begin 
+                inf = 1;
+                direct_result = a_src;
+            end
         end
 
-        else if(a_zero & b_zero & (a_src[num_bits-1] ^ b_src[num_bits-1]))
+        else if(a_zero & b_zero)
         begin
             zero   = 1;
-            direct_result = 16'b0000000000000000;
+            direct_result = {(~diff_sign)&a_src[num_bits-1], {exp_width{1'b0}}, {mant_width{1'b0}}};
         end 
 
-        else if(a_zero | a_inf)
+        else if(a_inf | b_inf)
         begin
-            direct_result = b_src;
-
-            zero   = b_zero;
-            inf    = b_inf;
-            subN   = b_subN;
-            Norm   = b_Norm;
+            direct_result = a_inf ? a_src : b_src;
+            inf = 1;
         end
         
-        else if(b_zero | b_inf)
+        else if(a_zero | b_zero)
         begin
-            direct_result = b_src;
+            direct_result = a_zero ? b_src : a_src;
 
-            zero   = a_zero;
-            inf    = a_inf;
-            subN   = a_subN;
-            Norm   = a_Norm;
+            subN   = a_zero ? b_subN : a_subN;
+            Norm   = a_zero ? b_Norm : a_Norm;
         end
 
         /* Aligning mantissas */
@@ -126,7 +137,7 @@ module addsub #(parameter num_round_bits, parameter num_bits, parameter exp_widt
             begin
                 arithmetic = 1;
 
-                if(a_src[mant_width-1:0]<b_src[mant_width-1:0])
+                if({a_Norm, a_src[mant_width-1:0]}<{b_Norm, b_src[mant_width-1:0]})
                 begin
                     big_mant    = {b_Norm, b_src[mant_width-1:0], {num_round_bits{1'b0}}};
                     little_mant = {a_Norm, a_src[mant_width-1:0], {num_round_bits{1'b0}}};
@@ -155,5 +166,6 @@ module addsub #(parameter num_round_bits, parameter num_bits, parameter exp_widt
             end
         end
     end
+
 
 endmodule;

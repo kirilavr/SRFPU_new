@@ -72,20 +72,37 @@ module hp_top #
 
 
         /* testing_outputs: muldiv */
-        output logic [mant_width*2+1:0] muldiv_test_unnorm_mant,
-        output logic [exp_width+1:0]    muldiv_test_unnorm_exp,
+        output logic [mant_width*2+1:0]              muldiv_test_unnorm_mant,
+        output logic [exp_width+1:0]                 muldiv_test_unnorm_exp,
 
         /* testing_outputs: muldiv_norm */
         output logic [mant_width+num_round_bits-1:0] muldiv_norm_test_unrounded_mant,
         output logic [exp_width+1:0]                 muldiv_norm_test_unrounded_exp,
 
-        output logic [5:0] flag_test,
+        output logic [5:0]                           flag_test,
 
-        output logic [num_round_bits-1:0] rand_test,
+        output logic [num_round_bits-1:0]            rand_test,
 
-        output logic [exp_width+1:0] shift_test,
+        output logic [exp_width+1:0]                 shift_test,
 
-        output logic [mant_width:0] round_out_test
+        output logic [mant_width:0]                  round_out_test,
+ 
+
+        /* testing outputs: addsub */
+        output logic [mant_width+num_round_bits+1:0] addsub_test_unnorm_mant,
+        output logic [exp_width+1:0]                 addsub_test_unnorm_exp,
+        output logic [num_bits-1:0]                  addsub_test_direct_result,
+
+        output logic                                 addsub_test_arithmetic,
+        output logic                                 addsub_test_sign,
+        output logic [5:0]                           addsub_test_flags,
+
+        /* testing outputs: addsub norm */
+        output logic [mant_width+num_round_bits+1:0] addsub_norm_test_mant,
+        output logic [exp_width+1:0]                 addsub_norm_test_exp,
+
+        output logic [6:0] exp_test_a,
+        output logic[6:0] exp_test_b
 
     `endif
 );
@@ -190,6 +207,7 @@ module hp_top #
     /* assignments to test pins */
     `ifdef debug_mode
 
+    /* assignments for muldiv tests */
     assign muldiv_pre_test_mantA           = mantA_mul;
     assign muldiv_pre_test_mantB           = mantB_mul; 
 
@@ -212,12 +230,25 @@ module hp_top #
 
     assign round_out_test                  = round_out;
 
+    assign addsub_norm_test_mant           = unrounded_mant_add;
+    assign addsub_norm_test_exp            = unrounded_exp_add;
+
+    assign addsub_test_unnorm_mant         = unnorm_mant_add;
+    assign addsub_test_unnorm_exp          = unnorm_exp_add;
+
+    assign addsub_test_direct_result       = direct_result_add;
+    assign addsub_test_sign                = sign_add;
+    assign addsub_test_arithmetic          = arithmetic_add;
+
     assign flag_test[5] = zero;
-    assign flag_test[4] = inf; 
+    assign flag_test[4] = inf ; 
     assign flag_test[3] = subN;
     assign flag_test[2] = Norm;
     assign flag_test[1] = QNan;
     assign flag_test[0] = SNan;
+
+    /* assignments for addsub tests */
+
     `endif
 
 
@@ -230,7 +261,7 @@ module hp_top #
                      (src_a, a_zero, a_inf, a_subN, a_Norm, a_QNan, a_SNan, 
                       src_b, b_zero, b_inf, b_subN, b_Norm, b_QNan, b_SNan,
                       unnorm_mant_add, unnorm_exp_add, direct_result_add, sign_add, arithmetic_add,
-                      add_res_zero, add_res_inf, add_res_subN, add_res_Norm, add_res_QNan, add_res_SNan);
+                      add_res_zero, add_res_inf, add_res_subN, add_res_Norm, add_res_QNan, add_res_SNan, exp_test_a, exp_test_b);
 
     muldiv_pre #(num_bits, exp_width, mant_width, bias) muldiv_pre_inst
                 (src_a, a_zero, a_inf, a_subN, a_Norm, a_QNan, a_SNan,
@@ -280,7 +311,7 @@ module hp_top #
                     clz_in   = unnorm_mant_add[mant_width + num_round_bits -1:0];
                     round_in = unrounded_mant_add[mant_width+num_round_bits-1:0];
 
-                    res_exp  = round_out[mant_width] ? unrounded_exp_add + bias : unrounded_exp_add + bias + 1;
+                    res_exp  = round_out[mant_width] ? unrounded_exp_add + bias + 1 : unrounded_exp_add + bias;
 
                     zero     = ((res_exp == 0) & (unrounded_mant_add == 0)) ? 1 : 0;
                     inf      = (res_exp == max_exp)                         ? 1 : 0;

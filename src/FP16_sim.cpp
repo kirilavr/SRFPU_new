@@ -8,7 +8,7 @@ FP16::FP16(uint16_t num)
     sign = num & SIGN;
 
     //case: zero 
-    if((mant == POINT16) & (exp == -15))
+    if((mant == POINT16) & (exp < -14))
     {
         flag_arr[ZERO_F] = 1;
     }
@@ -206,12 +206,229 @@ FP16 FP16::operator*(FP16& num2)
 
 }
 
-/*
-FP16::operator+(FP16& num2)
+
+FP16 FP16::operator+(FP16& num2)
 {
+    uint16_t res_sign;
+    int16_t res_exp;
+    uint32_t res_mant;
+
+
+    //setting SNaN
+    if(flag_arr[SNAN_F] | num2.flag_arr[SNAN_F])
+    {
+        if(flag_arr[SNAN_F])
+        {
+            FP16 ret = FP16(val);
+            return ret;
+        }
+        else
+        {
+            FP16 ret = FP16(num2.val);
+            return ret;
+        }
+    }
+
+    //setting QNaN
+    else if(flag_arr[QNAN_F] | num2.flag_arr[QNAN_F])
+    {
+        if(flag_arr[QNAN_F])
+        {
+            FP16 ret = FP16(val);
+            return ret;
+        }
+        else
+        {
+            FP16 ret = FP16(num2.val);
+            return ret;
+        }
+    }  
+
+    else if(flag_arr[INF_F] & num2.flag_arr[INF_F])
+    {
+        //std::cout<<"two zeros: "<<std::bitset<16>(sign)<<" "<<std::bitset<16>(num2.sign)<<std::endl;
+
+        if((sign ^ num2.sign) == SIGN)
+        {
+            //std::cout<<"inside here";
+            FP16 ret = FP16(0b0111111000000000);
+            return ret;
+        }
+        else
+        {
+            FP16 ret = flag_arr[INF_F] ? FP16(val) : FP16(num2.val);
+            return ret;
+        }
+    }
+
+    else if(flag_arr[ZERO_F] & num2.flag_arr[ZERO_F])
+    {
+        //std::cout<<"two zeros: "<<std::bitset<16>(sign)<<" "<<std::bitset<16>(num2.sign)<<std::endl;
+        if((sign ^ num2.sign) == SIGN)
+        {
+            //std::cout<<"inside here";
+            FP16 ret = FP16(0x0000);
+            return ret;
+        }
+        else 
+        {
+            FP16 ret = FP16(num2.val);
+            return ret;
+        }
+    }
+
+    else if(flag_arr[INF_F] | num2.flag_arr[INF_F])
+    {
+        FP16 ret = flag_arr[INF_F] ? FP16(val) : FP16(num2.val);
+        return ret;
+    }
+
+    else if(flag_arr[ZERO_F] | num2.flag_arr[ZERO_F])
+    {
+        FP16 ret = flag_arr[ZERO_F] ? FP16(num2.val) : FP16(val);
+        return ret;
+    }
+
+    else 
+    {
+        #if DEBUG_MODE
+        std::cout<<"prealign Mant 1: "<<std::bitset<18>(mant)<<std::endl;
+        std::cout<<"prealign Mant 2: "<<std::bitset<18>(num2.mant)<<std::endl;
+
+        std::cout<<"prealign exp 1: "<<exp<<std::endl;
+        std::cout<<"prealign exp 2: "<<num2.exp<<std::endl;
+        #endif
+
+        res_exp = align_mantissas(mant, num2.mant, exp, num2.exp);
+
+        #if DEBUG_MODE
+        std::cout<<"Mant 1: "<<std::bitset<18>(mant)<<std::endl;
+        std::cout<<"Mant 2: "<<std::bitset<18>(num2.mant)<<std::endl;
+
+        std::cout<<"exp 1: "<<exp<<std::endl;
+        std::cout<<"exp 2: "<<num2.exp<<std::endl;
+        #endif
+
+        if((sign ^ num2.sign) == SIGN)
+        {
+            if(mant < num2.mant)
+            {
+                res_mant = num2.mant - mant;
+                res_sign = num2.sign;
+            }
+            else
+            {
+                res_mant = mant - num2.mant;
+                res_sign = sign;
+            }
+        }
+        else 
+        {
+            res_mant = num2.mant + mant;
+            res_sign = num2.sign;
+        }
+
+        #if DEBUG_MODE
+        std::cout<<"res mant: "<<std::bitset<18>(res_mant)<<std::endl;
+        std::cout<<"res_exp: "<<res_exp<<std::endl;
+        #endif
+
+        normalise_addsub(res_mant, res_exp);
+
+        #if DEBUG_MODE
+        std::cout<<"norm mant: "<<std::bitset<18>(res_mant)<<std::endl;
+        std::cout<<"norm_exp: "<<res_exp<<std::endl;
+        #endif
+
+        res_mant <<= (MANT_WIDTH-NUM_ROUND_BITS);
+
+        round(res_mant);
+
+        #if DEBUG_MODE
+        std::cout<<"rounded mant: "<<std::bitset<20>(res_mant)<<std::endl;
+        #endif
+
+        if((res_mant&(POINT32<<1)) == (POINT32<<1))
+        {
+            res_mant >>= 1;
+            res_exp += 1;
+        }
+
+
+        if(((res_mant&(POINT32)) == (POINT32)) & (res_exp == -15))
+        {
+            res_exp += 1;
+        }
+
+        #if DEBUG_MODE
+        std::cout<<"rounded_res_exp: "<<res_exp<<std::endl;
+        #endif
+
+        uint16_t ret_val = res_sign + ((uint16_t) (res_mant>>10)&MANT) + ((res_exp+15)<<10);
+        //std::cout<<" ret val: "<<std::bitset<16>(ret_val);
     
+        FP16 ret = FP16(ret_val);
+
+        #if DEBUG_MODE
+        std::cout<<"final: "<<std::bitset<16>(ret.val)<<std::endl;
+        #endif
+
+        return ret;
+    }
 }
-*/
+
+
+int16_t FP16::align_mantissas(uint32_t &mant_a, uint32_t &mant_b, int16_t &exp_a, int16_t &exp_b)
+{
+    if(exp_a > exp_b)
+    {
+        mant_a <<= NUM_ROUND_BITS;
+        mant_b <<= NUM_ROUND_BITS;
+        mant_b >>= (exp_a - exp_b);
+        return exp_a;
+    }
+    else 
+    {
+        mant_b <<= NUM_ROUND_BITS;
+        mant_a <<= NUM_ROUND_BITS;
+        mant_a >>= (exp_b - exp_a);
+        return exp_b;
+    }
+}
+
+
+void FP16::normalise_addsub(uint32_t &mant, int16_t &res_exp)
+{
+    if(1<<(NUM_ROUND_BITS + MANT_WIDTH + 1) & mant)
+    {
+        mant >>= 1;
+        res_exp++;
+    }
+    else if(1<<(NUM_ROUND_BITS + MANT_WIDTH) & mant)
+    {
+        
+    }
+    else 
+    {
+        uint8_t lz = 0;
+        for(; (mant<<(lz)&(0x00000001<<(NUM_ROUND_BITS+MANT_WIDTH))) != (0x00000001<<(NUM_ROUND_BITS+MANT_WIDTH)); lz++){if(lz==100){break;}}
+        //std::cout<<"lz:"<<(int)lz<<std::endl;
+
+        if(lz < (res_exp - MIN_EXP))
+        {
+            mant <<= lz;
+            res_exp -= lz;
+        }
+        else 
+        {
+            mant <<= (res_exp - MIN_EXP);
+            res_exp = -15;
+        }
+    }
+}
+
+
+
 
 void FP16::round(uint32_t &mantissa)
 {
@@ -263,13 +480,15 @@ uint16_t FP16::LFSR(uint8_t num_round_bits, bool reset)
 }
 
 
-// int main()
-// {
-//     FP16 fp1 = FP16(0b0000000100110000);
-//     FP16 fp2 = FP16(0b0100001010111100);
+#if DEBUG_MODE
+int main()
+{
+    FP16 fp1 = FP16(0b0000000011100110);
+    FP16 fp2 = FP16(0b1000000011100110);
 
-//     FP16 res = fp1*fp2;
-// }
+    FP16 res = fp1+fp2;
+}
+#endif
 
 
 // FP16::set_zero(bool negative)

@@ -47,11 +47,13 @@ enum INSTR : uint8_t
 };
 
 
-test_case get_test_case(bool soak, bool reset);
+test_case get_test_case(bool soak, bool reset, uint8_t op, uint16_t sim_time);
 
 bool test_top(Vhp_top* dut, bool soak);
 
 bool test_mult(Vhp_top* dut, bool soak);
+
+bool test_addsub(Vhp_top* dut, bool soak);
 
 bool test_class(Vhp_top* dut, bool soak);
 

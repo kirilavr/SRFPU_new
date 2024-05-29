@@ -1,10 +1,10 @@
-module normaliser_add #(parameter num_round_bits, parameter mant_width, parameter exp_width, parameter min_exp)
+module normaliser_add #(parameter num_round_bits, parameter mant_width, parameter exp_width, parameter signed min_exp)
 (
     input logic       [mant_width+num_round_bits+1:0] unnorm_mant,
     input logic signed[exp_width+1:0] unnorm_exp,
     input logic       [exp_width+1:0] lz,
 
-    output logic       [mant_width+num_round_bits+1:0] unrounded_mant, 
+    output logic signed[mant_width+num_round_bits+1:0] unrounded_mant, 
     output logic signed[exp_width+1:0] unrounded_exp
 );
 
@@ -27,13 +27,13 @@ module normaliser_add #(parameter num_round_bits, parameter mant_width, paramete
         begin 
             if(lz < (unnorm_exp - min_exp))
             begin
-                unrounded_mant = unnorm_mant<<lz;
-                unrounded_exp  = unnorm_exp - lz;
+                unrounded_mant = unnorm_mant<<(lz+1);
+                unrounded_exp  = unnorm_exp-(lz+1);
             end 
             else 
             begin 
                 unrounded_mant = unnorm_mant<<(unnorm_exp - min_exp);
-                unrounded_exp  = min_exp;
+                unrounded_exp  = min_exp-1;
             end
         end 
     end 

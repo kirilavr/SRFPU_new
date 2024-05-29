@@ -1,12 +1,12 @@
 #include "test_fw.hpp"
 
-#define MAX_SIM_TIME 100000
+#define MAX_SIM_TIME 200000
 #define NUM_ROUND_BITS 6
 #define SR 0
 
 vluint64_t sim_time = 0;
 
-test_case get_test_case(bool soak, bool reset)
+test_case get_test_case(bool soak, bool reset, uint8_t op, uint16_t sim_time)
 {
     int seed = 12345;
     static std::mt19937 rng(seed);
@@ -38,31 +38,52 @@ test_case get_test_case(bool soak, bool reset)
         increment = dist(rng);
 
         if(j+increment > 65536)
+        {
             if(i+increment > 65536)
             {
                 FP16 op1 = FP16(0xFFFF);
                 FP16 op2 = FP16(0xFFFF);
-                FP16 expected_result = op1*op2;
 
-                test_case Case = {op1, op2, expected_result};
-                return Case;
+                if(op)
+                {
+                    FP16 expected_result = op1+op2;
+                    test_case Case = {op1, op2, expected_result};
+                    return Case;
+                }
+                else
+                {
+                    FP16 expected_result = op1+op2;
+                    test_case Case = {op1, op2, expected_result};
+                    return Case;
+                }
+                
             }
             else
             {
                 i += increment;
                 j = i;
             }
+        }
 
         FP16 op1 = FP16(i);
         FP16 op2 = FP16(j);
 
-        FP16 expected_result = op1*op2;
 
-        test_case Case = {op1, op2, expected_result};
 
-        j+= increment;
-        
-        return(Case);
+        if(op)
+        {
+            FP16 expected_result = op1*op2;
+            test_case Case = {op1, op2, expected_result};
+            j+= increment;
+            return Case;
+        }
+        else
+        {
+            FP16 expected_result = op1+op2;
+            test_case Case = {op1, op2, expected_result};
+            j+= increment;
+            return Case;
+        }
     }
 
     else
@@ -75,21 +96,36 @@ test_case get_test_case(bool soak, bool reset)
         FP16 op1 = FP16(unit_test_arr[k]);
         FP16 op2 = FP16(unit_test_arr[l]);
 
-        FP16 expected_result = op1*op2;
-
-        test_case Case = {op1, op2, expected_result};
-
-        if(l == 9)
+        if(op)
         {
-            k++;
-            l = k;
+            FP16 expected_result = op1+op2;
+            test_case Case = {op1, op2, expected_result};
+            if(l == 9)
+            {
+                k++;
+                l = k;
+            }
+            else 
+            {
+                l++;
+            }
+            return Case;
         }
         else
         {
-            l++;
+            FP16 expected_result = op1+op2;
+            test_case Case = {op1, op2, expected_result};
+            if(l == 9)
+            {
+                k++;
+                l = k;
+            }
+            else
+            {
+                l++;
+            }
+            return Case;
         }
-
-        return Case;
     }
 }
 
@@ -103,9 +139,6 @@ uint8_t get_expected_shift(uint64_t test_val)
 
     return shift;
 }
-
-
-
 
 
 bool test_muldiv(Vhp_top* dut, bool soak)
@@ -143,7 +176,8 @@ bool test_muldiv(Vhp_top* dut, bool soak)
 
     while(sim_time < MAX_SIM_TIME)
     {
-        test_case Case = get_test_case(soak, false);
+        test_case Case = get_test_case(soak, false, 0, sim_time);
+        
         vluint16_t op1 = Case.op1.val;
         vluint16_t op2 = Case.op2.val;
 
@@ -219,6 +253,100 @@ bool test_muldiv(Vhp_top* dut, bool soak)
 }
 
 
+bool test_addsub(Vhp_top* dut, bool soak)
+{
+    uint16_t sim_time = 0;
+
+    std::ofstream res_file_addsub("res_file_addsub.txt", std::ios::app);
+    std::ofstream res_file_addsub_norm("res_file_addsub_norm.txt", std::ios::app);
+    std::ofstream res_file_addsub_top("res_file_addsub_top.txt", std::ios::app);
+
+    std::string outcome;
+
+    vluint64_t unnorm_mant;
+    vluint16_t unnorm_exp;
+    vluint32_t direct_result;
+
+    vluint16_t flags;
+    vluint16_t arithmetic;
+    vluint16_t sign;
+
+    vluint64_t unround_mant;
+    vluint16_t unround_exp;
+
+    uint8_t exp_flags;
+
+    dut->operation = 0x00;
+
+    while(sim_time < MAX_SIM_TIME)
+    {
+        
+        test_case Case = get_test_case(soak, false, 0, sim_time);
+        vluint16_t op1 = Case.op1.val;
+        vluint16_t op2 = Case.op2.val;
+
+
+        dut->src_a = op1;
+        dut->src_b = op2;
+
+        dut->eval();
+
+        unnorm_mant = dut->addsub_test_unnorm_mant;
+        unnorm_exp = dut->addsub_test_unnorm_exp;
+
+        direct_result = dut->addsub_test_direct_result;
+        sign = dut->addsub_test_sign;
+        arithmetic = dut->addsub_test_arithmetic;
+        flags = dut->flag_test;
+
+        unround_mant = dut->addsub_norm_test_mant;
+        unround_exp = dut->addsub_norm_test_exp;
+
+        exp_flags = (Case.expected_res.flag_arr[0]<<5) + (Case.expected_res.flag_arr[1]<<4) + (Case.expected_res.flag_arr[2]<<3) +\
+                    (Case.expected_res.flag_arr[3]<<2) + (Case.expected_res.flag_arr[4]<<1) + (Case.expected_res.flag_arr[5]);
+
+
+        if((Case.expected_res.val == dut->res_out) & (flags == dut->flag_test))
+        {
+            outcome = "PASS";
+        }
+        else
+        {
+            outcome = "FAIL";
+        }
+
+                
+        res_file_addsub_top<<"test case: "<<sim_time<<": "<<outcome<<" input 1: "<<std::bitset<NUM_BITS>(op1)<<" input 2: "<<std::bitset<NUM_BITS>(op2)\
+                           <<" result: "<< std::bitset<NUM_BITS>(dut->res_out)<<" expected_result: "<<std::bitset<NUM_BITS>(Case.expected_res.val)\
+                           <<" flags: "<<std::bitset<6>(dut->flag_test)<<" expected_flags: "<<std::bitset<6>(exp_flags)<<" round out: "<<std::bitset<11>(dut->round_out_test)<<std::endl;
+
+        res_file_addsub<<"test case: "<<sim_time<<" : "<<" unnorm mant: "<<std::bitset<MANT_WIDTH+NUM_ROUND_BITS+2>(unnorm_mant)<<" unnorm exp: "\
+                       <<std::bitset<EXP_WIDTH+2>(unnorm_exp)<<" direct_result: "<<std::bitset<NUM_BITS>(direct_result)<<" sign: "<<sign<<" arithmetic: "\
+                       <<arithmetic<<" exp test a: "<<std::bitset<7>(dut->exp_test_a)<<" exp_test b: "<<std::bitset<7>(dut->exp_test_b)<<std::endl;
+
+        res_file_addsub_norm<<"test_case: "<<sim_time<<" : "<<" unround mant: "<<std::bitset<MANT_WIDTH+NUM_ROUND_BITS+2>(unround_mant)<<" unround exp: "\
+                            <<std::bitset<EXP_WIDTH+2>(unround_exp)<<" shift: "<<(int)(dut->shift_test)<<std::endl;
+
+        sim_time++;
+        
+        if(soak)
+        {
+            if((op1 == 0xFFFF) & (op2 == 0xFFFF))
+            {
+                break;
+            }
+        }
+    }
+
+    res_file_addsub.close();
+    res_file_addsub_norm.close();
+    res_file_addsub_top.close();
+    
+    return true;
+    
+}
+
+
 bool test_rng(Vhp_top* dut, bool soak)
 {
     std::ofstream res_file_rng("res_file_rng.txt", std::ios::app);
@@ -281,7 +409,7 @@ int main(int argc, char** argv, char** env) {
     dut->eval();
 
     /* call test function below */
-    test_muldiv(dut, 1);
+    test_addsub(dut, 1);
     /****************************/
 
     m_trace->close();
