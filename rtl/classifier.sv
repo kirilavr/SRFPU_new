@@ -1,3 +1,5 @@
+//`timescale 1ns / 1ps
+
 module classifier #(parameter num_bits, parameter exp_width, parameter mant_width)
 (
 
@@ -18,7 +20,7 @@ module classifier #(parameter num_bits, parameter exp_width, parameter mant_widt
 
     assign expOnes   = &f[num_bits-2:num_bits-exp_width-1];
     assign expZeroes = ~|f[num_bits-2:num_bits-exp_width-1];
-    assign sigZeroes = ~|f[9:0];
+    assign sigZeroes = ~|f[mant_width-1:0];
 
     assign SNan      = expOnes   & ~f[mant_width-1] & ~sigZeroes;
     assign QNan      = expOnes   &  f[mant_width-1];
