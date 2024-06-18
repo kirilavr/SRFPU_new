@@ -6,10 +6,12 @@ module normaliser_add #(parameter num_round_bits, parameter mant_width, paramete
 
     output logic signed[mant_width+num_round_bits+1:0] unrounded_mant, 
     output logic signed[exp_width+1:0] unrounded_exp
+
 );
 
     always_comb 
     begin 
+        
 
         if(unnorm_mant[mant_width+num_round_bits+1])
         begin 

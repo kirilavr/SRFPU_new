@@ -22,7 +22,7 @@
 /* verilator lint_off CASEOVERLAP */
 /* verilator lint_off CASEINCOMPLETE */
 
-`timescale 1 ns / 1 ps
+//`timescale 1 ns / 1 ps
 // `default_nettype none
 // `define DEBUGNETS
 // `define DEBUGREGS
@@ -156,8 +156,14 @@ module picorv32 #(
 
 	// Trace Interface
 	output reg        trace_valid,
-	output reg [35:0] trace_data
+	output reg [35:0] trace_data,
+
+	output reg[31:0] reg_pc_test,
+	output reg[7:0] state_machine_test
 );
+	assign reg_pc_test = reg_pc;
+	assign state_machine_test = cpu_state;
+
 	localparam integer irq_timer = 0;
 	localparam integer irq_ebreak = 1;
 	localparam integer irq_buserror = 2;
@@ -394,7 +400,7 @@ module picorv32 #(
 		end else begin
 			if (!last_mem_valid)
 				mem_la_firstword_reg <= mem_la_firstword;
-			last_mem_valid <= mem_valid && !mem_ready;
+				last_mem_valid <= mem_valid && !mem_ready;
 		end
 	end
 
@@ -763,7 +769,7 @@ module picorv32 #(
 	reg [4:0] q_insn_rs1;
 	reg [4:0] q_insn_rs2;
 	reg [4:0] q_insn_rd;
-	reg dbg_next;
+	reg dbg_next;			
 
 	wire launch_next_insn;
 	reg dbg_valid_insn;
@@ -2166,28 +2172,28 @@ module picorv32 #(
 `endif
 endmodule
 
-// This is a simple example implementation of PICORV32_REGS.
-// Use the PICORV32_REGS mechanism if you want to use custom
-// memory resources to implement the processor register file.
-// Note that your implementation must match the requirements of
-// the PicoRV32 configuration. (e.g. QREGS, etc)
-module picorv32_regs (
-	input clk, wen,
-	input [5:0] waddr,
-	input [5:0] raddr1,
-	input [5:0] raddr2,
-	input [31:0] wdata,
-	output [31:0] rdata1,
-	output [31:0] rdata2
-);
-	reg [31:0] regs [0:30];
+	// This is a simple example implementation of PICORV32_REGS.
+	// Use the PICORV32_REGS mechanism if you want to use custom
+	// memory resources to implement the processor register file.
+	// Note that your implementation must match the requirements of
+	// the PicoRV32 configuration. (e.g. QREGS, etc)
+	module picorv32_regs (
+		input clk, wen,
+		input [5:0] waddr,
+		input [5:0] raddr1,
+		input [5:0] raddr2,
+		input [31:0] wdata,
+		output [31:0] rdata1,
+		output [31:0] rdata2
+	);
+		reg [31:0] regs [0:30];
 
-	always @(posedge clk)
-		if (wen) regs[~waddr[4:0]] <= wdata;
+		always @(posedge clk)
+			if (wen) regs[~waddr[4:0]] <= wdata;
 
-	assign rdata1 = regs[~raddr1[4:0]];
-	assign rdata2 = regs[~raddr2[4:0]];
-endmodule
+		assign rdata1 = regs[~raddr1[4:0]];
+		assign rdata2 = regs[~raddr2[4:0]];
+	endmodule
 
 
 /***************************************************************
