@@ -1,9 +1,11 @@
 #!/bin/bash
 
-MAKEFILE_PATH="./obj_dir/Vhp_top.mk"
+MODULE=$1;
 
-FP16_USER_CLASS="    FP16_sim"
-FP16_DIR="    ./src"
+MAKEFILE_PATH="./obj_dir/V${MODULE}.mk"
+
+FP16_USER_CLASS="FP16_sim"
+FP16_DIR="./src"
 COMPILE="FP16_sim.o: ./src/FP16_sim.cpp
 	\$(OBJCACHE) \$(CXX) \$(CXXFLAGS) \$(CPPFLAGS) \$(OPT_FAST) -c -o \$@ $<"
 
