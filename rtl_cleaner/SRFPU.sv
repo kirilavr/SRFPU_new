@@ -72,7 +72,7 @@ module SRFPU#(
 	//testing outputs
 	output logic[adder_size-1:0]	test_mantissa_diff,
 	output logic[mant_width:0]	test_big_mant,
-	output logic[mant_width+remainder:0]	test_little_mant,
+	output logic[2*mant_width+round_bits_surp+1:0]	test_little_mant,
 	output logic[exp_width+1:0]	test_res_exp,
 	output logic	test_use_dir_res,
 	output logic[num_bits-1:0]	test_direct_result,
@@ -129,7 +129,8 @@ module SRFPU#(
 	output logic[num_bits-1:0] rfwd_test,
 	output logic [exp_width+1:0] unround_exp_test,
 
-	output logic[num_round_bits-1:0] rand_test
+	output logic[num_round_bits-1:0] rand_test,
+	output logic[32+mant_width:0] cvt_reg_test
 
 	`endif
 
@@ -145,13 +146,14 @@ module SRFPU#(
 	assign frs2_test = rfrd_2;
 	assign rfrd_1_test = rfrd_1;
 	assign rfrd_2_test = rfrd_2;
+	assign cvt_reg_test = cvt_reg;
 	`endif
 
 
     localparam exp_width                    = 8;
     localparam mant_width                   = (num_bits == 16) ? 7 : 23;
-	localparam round_bits_surp 				= num_round_bits > mant_width+1 ? mant_width+1-num_round_bits : 0;
-	localparam adder_size                   = 2*mant_width+3+round_bits_surp > 32 ? 2*mant_width+3+round_bits_surp : 31;
+	localparam round_bits_surp 				= num_round_bits > mant_width+1 ? num_round_bits-mant_width-1 : 0;
+	localparam adder_size                   = 2*mant_width+3+round_bits_surp > 32 ? 2*mant_width+3+round_bits_surp : 32;
 	localparam logic[exp_width+1:0] bias    = 127;
 	localparam logic signed[exp_width+1:0] neg_bias = -127;
 	localparam logic[exp_width+1:0] bias_of = 128;
@@ -161,7 +163,9 @@ module SRFPU#(
 	localparam logic signed[exp_width+1:0] min_subn_exp = -127 - mant_width - remainder;
 
 	localparam logic [7:0] cvt_min = 8'b01111110;
-	localparam logic [7:0] cvt_max = 8'b10011110;
+	localparam logic [7:0] cvt_max = 8'b10011111;
+
+	localparam clz_width = mant_width*2+3+round_bits_surp > 32 ? mant_width*2+3+round_bits_surp : 32;
 
 
 
@@ -230,7 +234,7 @@ module SRFPU#(
 
 	logic [31:0] instr_latched;
 
-	logic [31+mant_width:0] cvt_reg;
+	logic [32+mant_width:0] cvt_reg;
 	logic [5:0] mul_counter;
 
 	assign adder_neg = adder_res[adder_size-1];
@@ -323,8 +327,14 @@ module SRFPU#(
 
 						//conversion to integer
 						7'b1100000, 7'b1101000: begin 
+							`ifdef verify
+							if(num_bits == 32) begin
+								rfrd_1 <= op1[num_bits-1:0];
+								rfrd_2 <= op2[num_bits-1:0];
+							end
+							`endif
 							//EX stage needed if the conversion is signed and the operand is negative
-							state  <= ~pcpi_insn[20] ? EX : ROUND;
+							state  <= ROUND;
 
 							op_cvt <=1;
 							op_cvt_to_int <= ~pcpi_insn[28];
@@ -531,7 +541,7 @@ module SRFPU#(
 							end
 
 
-							adder_op1   <= {{adder_size-mant_width*2-3-round_bits_surp{1'b0}}, little_mant[remainder+mul_counter] ? {multiplicand, {1+round_bits_surp{1'b0}}} : 0};
+							adder_op1   <= {little_mant[mant_width+1+round_bits_surp+mul_counter] ? {multiplicand, {adder_size-2*mant_width-2{1'b0}}} : {adder_size{1'b0}}};
 							adder_op2   <= mul_counter == 0 ? 0 : adder_res;
 
 							mul_counter  <= mul_counter + 1;
@@ -602,19 +612,25 @@ module SRFPU#(
 					//await confirmation from memory
 					if(mem_ready) begin 
 						adder_op1 <= {{adder_size-31{1'b0}}, mem_rdata[30:0]};
+						state <= WB;
 					end 
 
-				end else if (op_cvt_to_int && norm1 && (rfrd_1[num_bits-2:mant_width] == cvt_min)) begin 
+				end else if (op_cvt_to_int && norm1 && (rfrd_1[num_bits-2:mant_width] == cvt_min) && (~op_cvt_signed && ~rfrd_1[num_bits-1] || op_cvt_signed)) begin 
 
 					adder_op1 <= {{adder_size-mant_width-1{1'b0}}, 1'b1, rfrd_1[mant_width-1:0]};
+					state <= WB;
 
-				end else if (rfrd_1[num_bits-2] && op_cvt_to_int && norm1 && ((rfrd_1[num_bits-2:mant_width] & ~cvt_max) == 0) && (~op_cvt_signed || ~&rfrd_1[num_bits-5:mant_width] == 1)) begin 
+				end else if (op_cvt_to_int && norm1 && ((rfrd_1[num_bits-2] && (~op_cvt_signed && rfrd_1[num_bits-3:mant_width] < 31 || op_cvt_signed && rfrd_1[num_bits-3:mant_width]<30)) || rfrd_1[num_bits-2:mant_width] == 8'b01111111)) begin 
 				
-					adder_op1 <= {{adder_size- 2*(mant_width+1){1'b0}}, cvt_reg[2*mant_width+1:0]};
+					adder_op1 <= {{adder_size- 2*(mant_width+1) - 1{1'b0}}, cvt_reg[2*mant_width+2:0]};
+					state <= WB;
 
 				end else if(op_cvt_to_int) begin
 					pcpi_wr    <= 1;
 					pcpi_ready <= 1;
+					op_cvt_to_int <= 0;
+					op_cvt		  <= 0;
+					op_cvt_signed <= 0;
 					state 	   <= DECODE;
 
 					if(snan1 || qnan1 || (rfrd_1[num_bits-1] && ~op_cvt_signed)) begin 
@@ -622,16 +638,27 @@ module SRFPU#(
 					end else if(~rfrd_1[num_bits-2]) begin 
 						pcpi_rd <= 32'h0000_0000;
 					end else begin 
-						pcpi_rd <= op_cvt_signed ? 32'h7fff_ffff : 32'hffff_ffff;
+						pcpi_rd <= op_cvt_signed ? (rfrd_1[num_bits-1] ? 32'h8000_0000 : 32'h7fff_ffff) : 32'hffff_ffff;
 					end 
 				 
 
 				end else if(op_cvt) begin 
 					//structured in the same way as arithmetic operations
-					adder_op1 <= {{adder_size-2*mant_width-2{1'b0}}, cvt_reg[2*mant_width+1:0]};
+					if(pcpi_rs1 == 0 || pcpi_rs1[31]&&~op_cvt_signed) begin 
+						rfwd <= 0;
+						rfwe <= 1;
+						pcpi_ready <= 1;
+						state <= DECODE;
+						op_cvt <= 0;
+						op_cvt_signed <= 0;
+					end else begin
+						adder_op1 <= {cvt_reg[32+mant_width-:mant_width+2], {adder_size-mant_width-2{1'b0}}};
+						state <= WB;
+					end
 				
 				end else begin 
 					adder_op1 <= {{adder_size-2*mant_width-round_bits_surp-3{1'b0}}, norm_mant};
+					state <= WB;
 				end 
 
 				
@@ -644,11 +671,13 @@ module SRFPU#(
 						//if bfloats are being used the addition needs to be in the 7th bit of the conversion register
 						//otherwise it needs to be in the 23rd bit ie. mant width
 						if(op_cvt_to_int) begin 
-							adder_op2 <= {{adder_size-mant_width-1{1'b0}}, cvt_reg[mant_width-1] && (cvt_reg[mant_width] || |cvt_reg[mant_width-1]), {mant_width+round_bits_surp{1'b0}}};
+							adder_op2 <= {{adder_size-mant_width-1{1'b0}}, cvt_reg[mant_width] /* && (cvt_reg[mant_width+1] || |cvt_reg[mant_width-1:0])*/, {mant_width{1'b0}}};
+						end else if(op_cvt) begin 
+							adder_op2 <= {{adder_size-mant_width-2{1'b0}}, cvt_reg[30] && (cvt_reg[31] || |cvt_reg[29:0]), {mant_width+1{1'b0}}};
 						end else if(op_lw & mem_ready) begin 
-							adder_op2 <= {{adder_size-mant_width-1{1'b0}}, mem_rdata[mant_width-1] && (mem_rdata[mant_width] || |mem_rdata[mant_width-2:0]), {mant_width+round_bits_surp{1'b0}}};
+							adder_op2 <= {{adder_size-mant_width-1{1'b0}}, mem_rdata[mant_width-1] && (mem_rdata[mant_width] || |mem_rdata[mant_width-2:0]), {mant_width{1'b0}}};
 						end else begin
-							adder_op2 <= {{adder_size-mant_width-round_bits_surp-1{1'b0}}, norm_mant[remainder-1] && (norm_mant[remainder] || |norm_mant[remainder-2:0]) , {mant_width+round_bits_surp{1'b0}}};
+							adder_op2 <= {{adder_size-mant_width-round_bits_surp-1{1'b0}}, norm_mant[mant_width+round_bits_surp] && (norm_mant[mant_width+round_bits_surp+1] || |norm_mant[mant_width+round_bits_surp-1:0]) , {mant_width+round_bits_surp{1'b0}}};
 						end 
 					end
 					
@@ -657,7 +686,7 @@ module SRFPU#(
 						if(op_cvt_to_int) begin 
 							adder_op2 <= {{adder_size-mant_width-round_bits_surp-1{1'b0}}, rand_val, {num_round_bits<mant_width+1?(mant_width+1-num_round_bits):0{1'b0}}};
 						end else if(op_lw & mem_ready) begin 
-							adder_op2 <= {{adder_size-16{1'b0}}, rand_val[15:0]};
+							adder_op2 <= {{adder_size-16{1'b0}}, rand_val[num_round_bits-1-:num_round_bits > 16 ? 16 : num_round_bits], {16-num_round_bits{1'b0}}};
 						end else begin 
 							adder_op2 <= {{adder_size-mant_width-round_bits_surp-1{1'b0}}, rand_val, {num_round_bits<mant_width+1?(mant_width+1-num_round_bits):0{1'b0}}}; 
 						end
@@ -679,8 +708,6 @@ module SRFPU#(
 					end 
 					default: begin end
 				endcase
-
-				state <= WB;
 			end
 
 			
@@ -688,11 +715,14 @@ module SRFPU#(
 			WB: begin 
 
 				if(op_cvt_to_int) begin 
-					pcpi_rd <= ~|cvt_reg[mant_width:0] ? cvt_reg[mant_width+:32] : {{32-mant_width{1'b0}}, adder_res[mant_width+:mant_width]};
+					pcpi_rd_intermediate = ~|cvt_reg[mant_width:0] ? cvt_reg[mant_width+1+:32] : {{32-mant_width{1'b0}}, adder_res[mant_width+1+:mant_width]};
+					pcpi_rd <= op_cvt_signed && rfrd_1[num_bits-1] ? -pcpi_rd_intermediate : pcpi_rd_intermediate;
 					pcpi_wr <= 1;
+					pcpi_ready <= 1;
 					op_cvt_to_int <= 0;
 					op_cvt_signed <= 0;
 					op_cvt 		  <= 0;
+					state <= DECODE;
 
 				end else begin 
 
@@ -704,7 +734,7 @@ module SRFPU#(
 					
 
 					end else if(op_cvt) begin 
-						rfwd <= {sign, 1'b1, ({6'b010000, ~adder_res[31]} - lz[6:0]), adder_res[31-:mant_width]<<adder_res[31]};
+						rfwd <= {pcpi_rs1[31], adder_res[adder_size-1] ? {unround_exp[7:0]+7'b00000001, adder_res[adder_size-2-:mant_width]} : {unround_exp[7:0], adder_res[adder_size-3-:mant_width]}};
 						op_cvt_signed <= 0;
 						op_cvt 		  <= 0;
 					
@@ -721,12 +751,12 @@ module SRFPU#(
 						op_mul <= 0;
 
 					end else if(op_lw) begin 
-						rfwd <= {mem_rdata[31], adder_res[30:0]};
+						rfwd <= {mem_rdata[num_bits-1:0]};
 
 						op_lw <= 0;
 				
 					end else if(op_eq || op_le || op_lt) begin 
-						if(qnan1||qnan2||snan1||snan2) begin rfwd <= 32'h7fc0_0000; end
+						if(qnan1||qnan2||snan1||snan2) begin rfwd <= {12'h7fc, {num_bits-12{1'b0}}}; end
 						else if(adder_res == 0 && op_le || op_eq) begin rfwd <= 1; end
 						else if(adder_neg && (op_le || op_lt)) begin rfwd <= 1; end 
 						else begin rfwd <= 0; end 
@@ -744,7 +774,7 @@ module SRFPU#(
 		end
 	end
 
-
+	logic [31:0] pcpi_rd_intermediate;
 	logic [exp_width+1:0] lz_latched;
 	logic skip_mul;
 	
@@ -764,6 +794,16 @@ module SRFPU#(
 
 		if(state == ROUND)
 		begin	
+
+			if(op_cvt_to_int) begin 
+				cvt_reg = {{32{1'b0}}, 1'b1, rfrd_1[mant_width-1:0]}<<(rfrd_1[num_bits-2:mant_width+1] == 7'b0111111 ? {5'b00000, (rfrd_1[mant_width])} : (rfrd_1[num_bits-4:mant_width]+6'b00010));
+			end else if(op_cvt) begin 
+				clz_in  = {op_cvt_signed && pcpi_rs1[31] ? -pcpi_rs1 : pcpi_rs1, {clz_width-32{1'b0}}};
+				cvt_reg = {1'b0, op_cvt_signed && pcpi_rs1[31] ? -pcpi_rs1 : pcpi_rs1, {mant_width{1'b0}}}<<lz;
+				unround_exp = lz == 31 ? 10'b0001111111 : {5'b00100, 5'b11110-lz[4:0]};
+
+
+
 			//clz_in = adder_res[remainder+mant_width:0];
 
 			//In the case of a subnormal result the adder in NORM is used to calculate the shift needed to noramlise the result
@@ -774,7 +814,7 @@ module SRFPU#(
 			//and setting the exponent to zero: this always results in a subnormal result.
 			//sub will be active in the ROUND state if the exponent is -127 or less
 
-			if(op_mul) begin 
+			end else if(op_mul) begin 
 				if(sub) begin 
 					if(simple_norm && adder_res[exp_width+1:0] == 1) begin 
 						unround_exp = 1;
@@ -833,11 +873,11 @@ module SRFPU#(
 
 		if(state == ALIGN)
 		begin 
-			clz_in = {1'b0, subn1 ? rfrd_1[mant_width-1:0] : rfrd_2[mant_width-1:0], {mant_width+2+round_bits_surp{1'b0}}};
+			clz_in = {1'b0, subn1 ? rfrd_1[mant_width-1:0] : rfrd_2[mant_width-1:0], {clz_width-mant_width-1{1'b0}}};
 		end
 
 		if(state == NORM) begin 
-			clz_in = {adder_res[2*mant_width+round_bits_surp+1:0], 1'b0};
+			clz_in = {adder_res[2*mant_width+round_bits_surp+1:0], {clz_width-2*mant_width-round_bits_surp-2{1'b0}}};
 		end
 		
 
@@ -965,7 +1005,7 @@ logic sign;
 logic signed [exp_width+1:0] exp_change;
 logic neg_shift;
 logic simple_norm;
-logic [mant_width*2+2+round_bits_surp:0] clz_in;
+logic [clz_width-1:0] clz_in;
 
 addmul_pre #(round_bits_surp, num_bits, exp_width, mant_width) 
 			   addsub_pre_inst(.zero1(zero1), .inf1(inf1), .subn1(subn1), .norm1(norm1), .qnan1(qnan1), .snan1(snan1),
@@ -982,7 +1022,7 @@ logic [exp_width+1:0] lz;
 rng #(num_round_bits) rng_inst(.clk(clk), .resetn(resetn), .get_next_val(get_next_val), .out(rand_val));
 
 
-clz #(round_bits_surp, exp_width, mant_width) clz_inst(.in(clz_in), .lz(lz));
+clz #(clz_width, exp_width) clz_inst(.in(clz_in), .lz(lz));
 
 
 

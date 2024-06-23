@@ -27,7 +27,7 @@ module addmul_pre #(parameter round_bits_surp, parameter num_bits, parameter exp
     input logic [exp_width+1:0] lz,
 
     output logic [mant_width:0] big_mant,
-    output logic [2*mant_width+1:0] little_mant,
+    output logic [2*mant_width+1+round_bits_surp:0] little_mant,
 
     output logic[exp_width+1:0] unnorm_exp,
     output logic[num_bits-1:0]  direct_result,

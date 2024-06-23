@@ -1,7 +1,7 @@
 `include "./rtl_cleaner/SRFPU.sv"
 `define debug_mode 1
 
-module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 18, parameter num_bits = 32, parameter exp_width = 8
+module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 10, parameter num_bits = 32, parameter exp_width = 8
 )
 (
     input logic clk,
@@ -79,7 +79,8 @@ module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 18, p
     output logic[exp_width+1:0] shift_test,
     output logic[exp_width+1:0] unround_exp_test,
     output logic[mant_width*2+1:0] multiplicand_test,
-    output logic[5:0] mul_counter_test
+    output logic[5:0] mul_counter_test,
+    output logic[32+mant_width:0] cvt_reg_test
 
 	`endif
     ,
@@ -97,8 +98,8 @@ module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 18, p
     output logic[num_round_bits-1:0] rand_test
 );
 
-    localparam round_bits_surp = num_round_bits>mant_width+1?mant_width+1-num_round_bits:0;
-    localparam adder_size = 2*mant_width+3+round_bits_surp > 32 ? 2*mant_width+3+round_bits_surp : 31;
+    localparam round_bits_surp = num_round_bits>mant_width+1?num_round_bits-mant_width-1:0;
+    localparam adder_size = 2*mant_width+3+round_bits_surp > 32 ? 2*mant_width+3+round_bits_surp : 32;
     
     
 
@@ -176,7 +177,8 @@ module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 18, p
             .rfrd_1_test(rfrd_1_test),
             .rfrd_2_test(rfrd_2_test),
             .rfwd_test(rfwd),
-            .rand_test(rand_test)
+            .rand_test(rand_test),
+            .cvt_reg_test(cvt_reg_test)
             `endif
     );
 
