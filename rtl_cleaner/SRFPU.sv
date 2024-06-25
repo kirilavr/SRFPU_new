@@ -8,7 +8,7 @@
 `include "rtl_cleaner/clz.sv"
 
 `define debug_mode 1
-`define verify 1
+//`define verify 1
 
 typedef enum logic[3:0] 
 {
@@ -70,7 +70,6 @@ module SRFPU#(
 	`ifdef debug_mode
 	,
 	//testing outputs
-	output logic[adder_size-1:0]	test_mantissa_diff,
 	output logic[mant_width:0]	test_big_mant,
 	output logic[2*mant_width+round_bits_surp+1:0]	test_little_mant,
 	output logic[exp_width+1:0]	test_res_exp,
@@ -108,22 +107,12 @@ module SRFPU#(
 	output logic [exp_width+1:0] test_unnorm_exp,
 	output logic [2*mant_width+2 + round_bits_surp:0] test_norm_mant,
 	output logic [exp_width+1:0] test_exp_change,
-
 	output logic [adder_size-1:0] test_addop1,
 	output logic [adder_size-1:0] test_addop2,
-
 	output logic [exp_width+1:0] shift_test,
-
-	output logic [mant_width*2+1:0] multiplicand_test,
-	output logic [5:0] mul_counter_test,
-	output logic[num_bits-1:0] res
-
-	, 
+	output logic[num_bits-1:0] res, 
 	input logic[31:0] op1,
 	input logic[31:0] op2,
-	
-	output logic[num_bits-1:0] frs1_test,
-	output logic[num_bits-1:0] frs2_test,
 	output logic[num_bits-1:0] rfrd_1_test,
 	output logic[num_bits-1:0] rfrd_2_test,
 	output logic[num_bits-1:0] rfwd_test,
@@ -142,8 +131,6 @@ module SRFPU#(
 	assign res = rfwd;
 	assign rfwd_test = rfwd;
 	assign state_test = state;
-	assign frs1_test = rfrd_1;
-	assign frs2_test = rfrd_2;
 	assign rfrd_1_test = rfrd_1;
 	assign rfrd_2_test = rfrd_2;
 	assign cvt_reg_test = cvt_reg;
@@ -168,7 +155,7 @@ module SRFPU#(
 	localparam clz_width = mant_width*2+3+round_bits_surp > 32 ? mant_width*2+3+round_bits_surp : 32;
 
 
-
+	
 	logic [4:0] rfar_1;
 	logic [4:0] rfar_2;
 	logic [4:0] rfaw;
@@ -178,9 +165,10 @@ module SRFPU#(
 	logic [num_bits-1:0] rfwd;
 
 	logic rfwe;
+	logic rfre;
 
-	`ifndef verify
-	regfile #(num_bits) regfile_inst(.clk(clk), .rst(resetn), .read_addr1(rfar_1), .read_addr2(rfar_2), .write_addr(rfaw), .write_data(rfwd),
+	`ifndef debug_mode
+	regfile #(num_bits) regfile_inst(.clk(clk), .rst(resetn), .rfre(rfre), .read_addr1(rfar_1), .read_addr2(rfar_2), .write_addr(rfaw), .write_data(rfwd),
 						 .write_enable(rfwe), .read_data1(rfrd_1), .read_data2(rfrd_2));
 	`endif 
 
@@ -225,9 +213,12 @@ module SRFPU#(
 	logic op_mvXW;
     logic op_lw;
     logic op_sw;
+	logic op_fused;
 
 	logic use_dir_res;
 	logic rs2_big;
+
+	logic negate;
 
 	logic signed [exp_width+1:0] exp_diff;
 	logic [num_bits-1:0] direct_result;
@@ -266,21 +257,30 @@ module SRFPU#(
             op_max     <= 0;   
             op_mvWX    <= 0;   
             op_mvXW    <= 0;   
+			op_fused   <= 0;
             get_next_val  <= num_bits == 32 ? 0 : 1;
             op_cvt_to_int <= 0; 
             op_cvt_signed <= 0;
             mem_access <= 0;
+			negate <= 0;
 		end 
 
     	else begin 
 		(* parallel_case, full_case *)
 		case(state)
 			DECODE: begin 
-				if(~pcpi_valid && pcpi_ready) begin pcpi_ready <= 0; end
+				if(~pcpi_valid && pcpi_ready) begin pcpi_ready <= 0; negate <= 0; rfwe <= 0; end
 				if(pcpi_valid && ~pcpi_ready) begin
 
 					rfar_1 <= pcpi_insn[19:15];
 					rfar_2 <= pcpi_insn[24:20];
+
+					`ifdef verify
+					if(num_bits == 32) begin
+						rfrd_1 <= op1[num_bits-1:0];
+						rfrd_2 <= op2[num_bits-1:0];
+					end
+					`endif
 					(* parallel_case, full_case *)
 					case(pcpi_insn[31:25]) 
 						//load word
@@ -302,37 +302,19 @@ module SRFPU#(
 						end 
 						//add and subtract
 						7'b0000100, 7'b0000000: begin
-							`ifdef verify
-							if(num_bits == 32) begin
-								rfrd_1 <= op1[num_bits-1:0];
-								rfrd_2 <= op2[num_bits-1:0];
-							end
-							`endif
-							state  <= PREALIGN;
-							op_add <= 1;
+							state      <= PREALIGN;
+							op_add     <= 1;
+							negate <= pcpi_insn[27];
 						end
 
 						//multiply
 						7'b0001000: begin 
-							`ifdef verify
-							if(num_bits == 32) begin
-								rfrd_1 <= op1[num_bits-1:0];
-								rfrd_2 <= op2[num_bits-1:0];
-							end
-							`endif
-
 							state  <= PREALIGN;
 							op_mul <= 1;
 						end
 
 						//conversion to integer
 						7'b1100000, 7'b1101000: begin 
-							`ifdef verify
-							if(num_bits == 32) begin
-								rfrd_1 <= op1[num_bits-1:0];
-								rfrd_2 <= op2[num_bits-1:0];
-							end
-							`endif
 							//EX stage needed if the conversion is signed and the operand is negative
 							state  <= ROUND;
 
@@ -369,14 +351,23 @@ module SRFPU#(
 							state <= WB;
 						end 
 
+						//integer to floating point move
 						7'b1111000: begin 
 							op_mvWX <= 1;
 							state <= WB;
 						end 
 
+						//fused operations
+						default: begin
 
+							op_fused <= 1;
+							op_mul   <= 1;
 
-						default: begin end 
+							state  <= PREALIGN;
+							op_mul <= 1;
+							negate <= (op_mul && pcpi_insn[4] || op_add && pcpi_insn[3]) ;
+
+						end
 					endcase
 				end
 			end
@@ -406,6 +397,14 @@ module SRFPU#(
 				//Not too bad since exp is small but still annoying 
 				
 				if(op_add) begin
+
+					if(op_fused) begin 
+						if(adder_res[2*mant_width+round_bits_surp+2]) begin 
+							rfrd_2 = unround_exp[exp_width-2:0] == 7'b1111111 ? {sign, 8'hff, {mant_width{1'b0}}} : {sign, unround_exp[7:0] + 8'h01, adder_res[2*mant_width+round_bits_surp+1-:mant_width]};
+						end else begin 
+							rfrd_2 = unround_exp[exp_width-1:0] == 8'hff ? {sign, 8'hff, {mant_width{1'b0}}} : {sign, unround_exp[7:0], adder_res[2*mant_width+round_bits_surp-:mant_width]};
+						end
+					end
 
 
 					if(subn1 & subn2) begin 
@@ -466,7 +465,7 @@ module SRFPU#(
 
 				//operands passed to alignment module
 				pre1 <= rfrd_1;
-				pre2 <= rfrd_2;
+				pre2 <= negate ? {~num_bits[num_bits-1], rfrd_2[num_bits-2:0]} : rfrd_2;
 				
 				//flags passed in to prealignment
 			end 
@@ -656,9 +655,18 @@ module SRFPU#(
 						state <= WB;
 					end
 				
-				end else begin 
-					adder_op1 <= {{adder_size-2*mant_width-round_bits_surp-3{1'b0}}, norm_mant};
-					state <= WB;
+				end else begin
+					if(op_fused && op_mul) begin 
+						state  <= PREALIGN;
+						op_add <= 1;
+						op_mul <= 0;
+						rfar_2 <= pcpi_insn[31:27];
+
+					end else begin
+						state <= WB;
+					end
+
+					adder_op1 <= {cvt_reg[32+mant_width-:mant_width+2], {adder_size-mant_width-2{1'b0}}};
 				end 
 
 				
@@ -714,6 +722,8 @@ module SRFPU#(
 
 			WB: begin 
 
+				rfwe <= 1;
+
 				if(op_cvt_to_int) begin 
 					pcpi_rd_intermediate = ~|cvt_reg[mant_width:0] ? cvt_reg[mant_width+1+:32] : {{32-mant_width{1'b0}}, adder_res[mant_width+1+:mant_width]};
 					pcpi_rd <= op_cvt_signed && rfrd_1[num_bits-1] ? -pcpi_rd_intermediate : pcpi_rd_intermediate;
@@ -747,8 +757,10 @@ module SRFPU#(
 							rfwd <= unround_exp[exp_width-1:0] == 8'hff ? {sign, 8'hff, {mant_width{1'b0}}} : {sign, unround_exp[7:0], adder_res[2*mant_width+round_bits_surp-:mant_width]};
 						end
 
-						op_add <= 0;
-						op_mul <= 0;
+						op_add   <= 0;
+						op_mul   <= 0;
+						op_fused <= 0;
+						rfar_1   <= pcpi_insn[31:27];
 
 					end else if(op_lw) begin 
 						rfwd <= {mem_rdata[num_bits-1:0]};
@@ -779,6 +791,8 @@ module SRFPU#(
 	logic skip_mul;
 	
 	always_comb begin 
+
+		rfre = ~(op_fused&&op_add);
 
 		//normalisation: the shift amount and normalised exponent values become available in the rounding stage: since the rounding stage is short
 		//this does not affect fmax and hence the subsequent shifts are performed in this stage: this is done in the interest of using one adder 
@@ -905,7 +919,6 @@ module SRFPU#(
 		test_snan2 = snan2;
 		test_qnan2 = qnan2;
 
-		test_mantissa_diff = adder_res;
 
 		test_big_mant = big_mant;
 		test_little_mant = little_mant;
@@ -937,8 +950,6 @@ module SRFPU#(
 		shift_test = lz;
 
 		unround_exp_test = unround_exp;
-
-		multiplicand_test = multiplicand;
 		rand_test = rand_val;
 	`endif
 

@@ -3,6 +3,7 @@
 module regfile #(parameter num_bits) (
     input logic clk,                // Clock signal
     input logic rst,                // Reset signal
+    input logic rfre,
     input logic [4:0] read_addr1,   // Read address for port 1
     input logic [4:0] read_addr2,   // Read address for port 2
     input logic [4:0] write_addr,   // Write address
@@ -16,8 +17,12 @@ module regfile #(parameter num_bits) (
     logic [num_bits-1:0] reg_array [31:0];
 
     // Combinatorial read logic
-    assign read_data1 = reg_array[read_addr1];
-    assign read_data2 = reg_array[read_addr2];
+    always_comb begin
+        if(rfre) begin
+            read_data2 = reg_array[read_addr1];
+        end 
+        read_data1 = reg_array[read_addr2];
+    end
 
     // Synchronous write logic
     always_ff @(posedge clk) begin

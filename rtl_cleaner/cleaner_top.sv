@@ -1,5 +1,6 @@
 `include "./rtl_cleaner/SRFPU.sv"
 `define debug_mode 1
+`define verify 1
 
 module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 10, parameter num_bits = 32, parameter exp_width = 8
 )
@@ -82,8 +83,6 @@ module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 10, p
     output logic[5:0] mul_counter_test,
     output logic[32+mant_width:0] cvt_reg_test
 
-	`endif
-    ,
     input logic[31:0] op1,
     input logic[31:0] op2,
     output logic[num_bits-1:0] result,
@@ -96,6 +95,9 @@ module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 10, p
     output logic[num_bits-1:0] rfrd_2_test,
     output logic[num_bits-1:0] rfwd,
     output logic[num_round_bits-1:0] rand_test
+
+	`endif
+
 );
 
     localparam round_bits_surp = num_round_bits>mant_width+1?num_round_bits-mant_width-1:0;
@@ -172,8 +174,6 @@ module cleaner_top #(parameter mant_width = 23, parameter num_round_bits = 10, p
             .op1(op1),
             .op2(op2),
             .res(result),
-            .frs1_test(frs1_test),
-            .frs2_test(frs2_test),
             .rfrd_1_test(rfrd_1_test),
             .rfrd_2_test(rfrd_2_test),
             .rfwd_test(rfwd),

@@ -191,11 +191,11 @@ int main(int argc, char** argv, char** env) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
 
-    static std::uniform_int_distribution<uint32_t> dis(0, 0xffffffff);
+    static std::uniform_int_distribution<uint32_t> dis(0x00000000, 0xffffffff);
     static std::uniform_real_distribution<float> filter_dis(0, 10);
     static std::uniform_int_distribution<uint8_t> layer_dis(0, 100);
 
-    uint32_t max_problem_size = 1000000;
+    uint32_t max_problem_size = 10000000;
     
     std::cout<<"progress: \n";
 
@@ -263,7 +263,7 @@ int main(int argc, char** argv, char** env) {
         float b = 43.1;
         pcpi_valid = 0;
 
-        while(sim_time<100000000)
+        while(sim_time<5000000)
         {
 
 
@@ -294,13 +294,14 @@ int main(int argc, char** argv, char** env) {
                 test_val2_f = *reinterpret_cast<float*>(&test_val2);
                 dut->pcpi_valid = 1;
                 pcpi_valid = 1;
-                dut->pcpi_insn = 0x00000053;
+                dut->pcpi_insn = 0x10000053;
                 dut->op1 = test_val1;
                 dut->op2 = test_val2;
+                dut->pcpi_rs1 = test_val1;
             }
 
             uint8_t pre_flags = (dut->test_zero<<5) + (dut->test_inf<<4) + (dut->test_subn<<3) + (dut->test_norm<<2) + (dut->test_qnan<<1) + (dut->test_snan);
-
+ 
             uint8_t flags1 = (dut->test_zero1<<5) + (dut->test_inf1<<4) + (dut->test_subn1<<3) + (dut->test_norm1<<2) + (dut->test_qnan1<<1) + (dut->test_snan1);
             uint8_t flags2 = (dut->test_zero2<<5) + (dut->test_inf2<<4) + (dut->test_subn2<<3) + (dut->test_norm2<<2) + (dut->test_qnan2<<1) + (dut->test_snan2);
 
@@ -308,44 +309,65 @@ int main(int argc, char** argv, char** env) {
             fpu_debug_file<<"cycle: "<<sim_time<<" state: "<<(int)dut->state_test<<std::endl;
             fpu_debug_file<<"mantissa difference (available in ALIGN): "<<std::bitset<MANT_WIDTH+NUM_ROUND_BITS+2>(dut->test_mantissa_diff)<<std::endl;
             fpu_debug_file<<"values available in EX big mant: "<<std::bitset<MANT_WIDTH+1>(dut->test_big_mant)<<" little mant: "<<std::bitset<2*MANT_WIDTH+2>(dut->test_little_mant)<<" arithmetic "<<(int)dut->test_use_dir_res\
-            <<" direct result: "<<std::bitset<32>(dut->test_direct_result)<<" sign: "<<int(dut->test_sign)<<" flags: "<<std::bitset<6>(pre_flags)<<" exp diff: "<<std::bitset<7>(dut->test_exp_diff)<<std::endl;
+            <<" direct result: "<<std::bitset<32>(dut->test_direct_result)<<" sign: "<<int(dut->test_sign)<<" flags: "<<std::bitset<6   >(pre_flags)<<" exp diff: "<<std::bitset<7>(dut->test_exp_diff)<<std::endl;
             fpu_debug_file<<"values available in NORM: adder_res: "<<std::bitset<2*MANT_WIDTH+3>(dut->adder_res_test)<<std::endl;
             fpu_debug_file<<" post processing values: unnorm_mant: "<<std::bitset<2*MANT_WIDTH+3>(dut->test_unnorm_mant)<<" unnorm exp: "<<std::bitset<9>(dut->test_unnorm_exp)<<" norm_mant: "\
             <<std::bitset<2*MANT_WIDTH+3>(dut->test_norm_mant)<<" test_exp_change: "<<std::bitset<9>(dut->test_exp_change)<<" norm mant buffer: "<<std::bitset<MANT_WIDTH+NUM_ROUND_BITS+2>(dut->test_norm_mant_buffer)<<std::endl;
             fpu_debug_file<<" flags1 "<<std::bitset<6>(flags1)<<" flags2 "<<std::bitset<6>(flags2)<<std::endl;
             fpu_debug_file<<" norm_mant_latched: "<<std::bitset<MANT_WIDTH+NUM_ROUND_BITS+2>(dut->norm_mant_latched_test);
-            fpu_debug_file<<" frs1: "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->frs1_test<<" frs2 "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->frs2_test<<std::endl;
+            //fpu_debug_file<<" frs1: "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->frs1_test<<" frs2 "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->frs2_test<<std::endl;
             //fpu_debug_file<<" op1 : "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->op1_test<<" op2: "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->op2_test<<std::endl;
             fpu_debug_file<<" addop1: "<<std::bitset<2*MANT_WIDTH+3>(dut->test_addop1)<<" addop2: "<<std::bitset<2*MANT_WIDTH+3>(dut->test_addop2)<<" shift test: ";
             fpu_debug_file<<std::bitset<9>(dut->shift_test)<<" unround exp: "<<std::bitset<9>(dut->unround_exp_test)<<std::endl;
-            fpu_debug_file<<" op1_fpu : "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->op1_test_fpu<<" op2_fpu: "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->op2_test_fpu<<std::endl;
+            //fpu_debug_file<<" op1_fpu : "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->op1_test_fpu<<" op2_fpu: "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->op2_test_fpu<<std::endl;
             fpu_debug_file<<" rfrd1 : "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->rfrd_1_test<<" rfrd2: "<<std::hex<<std::setw(8) << std::setfill('0')<<dut->rfrd_2_test<<std::endl;
             fpu_debug_file<<"rfwd: "<<std::bitset<32>(dut->rfwd)<<" pcpi_ready "<<(int)dut->pcpi_ready<<" rand val: "<<std::bitset<NUM_ROUND_BITS>(dut->rand_test)<<std::endl;
+            fpu_debug_file<<"cvt_reg: "<<std::bitset<56>(dut->cvt_reg_test);
             fpu_debug_file<<std::dec<<"mul_counter test: "<<(int)dut->mul_counter_test<<" multiplicand_test: "<<std::bitset<48>(dut->multiplicand_test)<<std::endl<<std::endl;
 
 
             if(dut->pcpi_ready)
             {
-                result_f = test_val1_f+test_val2_f;
+                result_f = test_val1_f*test_val2_f;
                 result   = dut->result;
 
                 dut->pcpi_valid = 0;
                 pcpi_valid = 0;
-                if((*reinterpret_cast<float*>(&dut->result) == result_f) || std::isnan(*reinterpret_cast<float*>(&dut->result)) && std::isnan(result_f))
+
+                float cvt_res;
+                
+                if(test_val1_f != 0)
+                {
+                    cvt_res = (float)test_val1;//(test_val1_f >= 0x7fffffff ? 0x7fffffff : (int32_t)(std::round(test_val1_f)));
+                }
+                else 
+                {
+                    cvt_res = 0;//(abs(test_val1_f) >= 0x7fffffff ? 0x80000000 : (int32_t)(std::round(test_val1_f)));
+                }
+
+                bool pass_condition = /*(*reinterpret_cast<float*>(&dut->result) == cvt_res)*/(*reinterpret_cast<float*>(&dut->result) == result_f) || (std::isnan(*reinterpret_cast<float*>(&dut->result)) && std::isnan(result_f));
+
+                if(pass_condition)
                 {
                     fpu_debug_file.close();
                     fpu_debug_file.open("fpu_debug_file", std::ios::out);
                     fpu_debug_file.close();
                     fpu_debug_file.open("fpu_debug_file", std::ios::app);
+                    // std::cout<<"input: "<<test_val1<<" binary input: "<<std::bitset<32>(test_val1)<<std::endl;
+                    // std::cout<<" expected int val: "<<result_f<<" binary expected int val: "<<std::bitset<32>(*reinterpret_cast<uint32_t*>(&result_f))<<std::endl;
+                    // std::cout<<" result: "<<*reinterpret_cast<float*>(&dut->result)<<" binary result: "<<std::bitset<32>(dut->result)<<std::endl<<std::endl;
                 }
                 else 
                 {
+                    std::cout<<"input: "<<test_val1<<" binary input: "<<std::bitset<32>(test_val1)<<std::endl;
+                    std::cout<<" expected int val: "<<result_f<<" binary expected int val: "<<std::bitset<32>(*reinterpret_cast<uint32_t*>(&result_f))<<std::endl;
+                    std::cout<<" result: "<<*reinterpret_cast<float*>(&dut->result)<<" binary result: "<<std::bitset<32>(dut->result)<<std::endl<<std::endl;
 
 
-                    std::cout<<"FAIL value 1: "<<std::bitset<32>(test_val1)<<" value 2: "<<std::bitset<32>(test_val2)<<std::endl;
-                    std::cout<<"value 1: "<<test_val1_f<<" value 2: "<<test_val2_f<<std::endl;
-                    std::cout<<"expected result: "<<result_f<<" result: "<<*reinterpret_cast<float*>(&dut->result)<<std::endl;
-                    std::cout<<"expected result: "<<std::bitset<32>(*reinterpret_cast<uint32_t*>(&result_f))<<" result: "<<std::bitset<32>(dut->result)<<std::endl;
+                //     std::cout<<"FAIL value 1: "<<std::bitset<32>(test_val1)<<" value 2: "<<std::bitset<32>(test_val2)<<std::endl;
+                //     std::cout<<"value 1: "<<test_val1_f<<" value 2: "<<test_val2_f<<std::endl;
+                //     std::cout<<"expected result: "<<result_f<<" result: "<<*reinterpret_cast<float*>(&dut->result)<<std::endl;
+                //     std::cout<<"expected result: "<<std::bitset<32>(*reinterpret_cast<uint32_t*>(&result_f))<<" result: "<<std::bitset<32>(dut->result)<<std::endl;
                     break;
                 }
             }
